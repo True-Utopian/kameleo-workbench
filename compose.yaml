@@ -1,0 +1,52 @@
+name: kameleo-workbench
+services:
+  volume-init:
+    image: node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+    user: root
+    command: ["sh", "-c", "chown 1001:1001 /exports /state && chmod 700 /exports /state"]
+    volumes:
+      - exports:/exports
+      - workbench-state:/state
+  kameleo:
+    image: kameleo/kameleo-app@sha256:56427134c725c5d36634640ff1579b167137ac08e05bdbb9705879a4e4298c4f
+    platform: linux/amd64
+    environment:
+      PAT: ${KAMELEO_PAT:?Set KAMELEO_PAT in .env}
+      VNCENABLE: "1"
+      VNCPASSWORD: ${VNC_PASSWORD:?Set VNC_PASSWORD in .env}
+      VERBOSE: "0"
+    shm_size: 2gb
+    volumes:
+      - kameleo-data:/data
+      - exports:/exports
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  workbench:
+    build: .
+    init: true
+    environment:
+      KAMELEO_URL: http://kameleo:5050
+      KAMELEO_VNC_URL: ws://kameleo/websockify
+      VNC_PASSWORD: ${VNC_PASSWORD}
+      WORKBENCH_TOKEN: ${WORKBENCH_TOKEN:-}
+      KAMELEO_EXPORT_DIR: /exports
+      DEMO_URL: http://workbench:3180/demo
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+      MAX_CONCURRENCY: "1"
+      RUN_TIMEOUT_MS: ${RUN_TIMEOUT_MS:-600000}
+    ports:
+      - "127.0.0.1:3180:3180"
+    volumes:
+      - workbench-state:/state
+      - exports:/exports
+      - ./automations:/app/automations:ro
+    depends_on:
+      kameleo:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  kameleo-data:
+  workbench-state:
+  exports:

@@ -1,0 +1,28 @@
+{
+  "proxies": [
+    {
+      "id": "my-static-gb-01",
+      "source": "static",
+      "enabled": false,
+      "protocol": "http",
+      "host": "proxy.example.com",
+      "port": 8080,
+      "usernameEnv": "STATIC_PROXY_USERNAME",
+      "passwordEnv": "STATIC_PROXY_PASSWORD",
+      "attributes": { "type": "isp", "country": "GB", "city": "London", "isp": "replace-with-provider-label", "asn": "AS12345" },
+      "createdAt": "2026-10-01T00:00:00Z",
+      "expiresAt": "2027-10-01T00:00:00Z"
+    },
+    {
+      "id": "my-nsocks-import-01",
+      "source": "nsocks",
+      "enabled": false,
+      "protocol": "socks5",
+      "host": "socks.example.com",
+      "port": 1080,
+      "usernameEnv": "NSOCKS_PROXY_USERNAME",
+      "passwordEnv": "NSOCKS_PROXY_PASSWORD",
+      "attributes": { "country": "US" }
+    }
+  ]
+}

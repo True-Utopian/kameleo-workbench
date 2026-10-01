@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#edf2f6">
+    <title>Browser workbench</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to workspace</a>
+    <section id="login-screen" class="login-screen" aria-labelledby="login-title">
+      <div class="login-brand"><span class="brand-mark" aria-hidden="true">w</span> Browser workbench</div>
+      <div class="login-panel">
+        <div class="login-glyph" aria-hidden="true"><span></span><span></span><span></span></div>
+        <h1 id="login-title">Your browser workspace.</h1>
+        <p>Run an automation, work in the browser, and keep the profile for next time.</p>
+        <form id="login-form">
+          <label for="access-token">Workbench access token</label>
+          <input id="access-token" name="token" type="password" autocomplete="current-password" required placeholder="Enter your access token">
+          <p class="field-hint">Use your workbench token. Your Kameleo token stays on the server.</p>
+          <p id="login-error" class="form-error" role="alert" hidden></p>
+          <button id="login-button" class="button primary" type="submit">Open workbench <span aria-hidden="true">↗</span></button>
+        </form>
+        <p id="login-status" class="login-status" role="status">Checking your session…</p>
+      </div>
+      <div class="login-foot">Headed browsers. Scripted workflows. Saved profiles.</div>
+    </section>
+
+    <div id="workspace" class="workspace" hidden>
+      <header class="app-header">
+        <a class="brand" href="/" aria-label="Browser workbench home"><span class="brand-mark" aria-hidden="true">w</span><span>Browser <strong>workbench</strong></span></a>
+        <div class="header-actions">
+          <span id="connection-status" class="connection-status" role="status">Connecting</span>
+          <button id="system-button" class="engine-button" type="button" aria-haspopup="dialog"><span id="engine-dot" class="status-dot neutral"></span><span id="engine-label">Checking engine</span><span class="chevron" aria-hidden="true">⌄</span></button>
+          <button id="logout-button" class="button quiet small" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <main id="main" class="workbench" tabindex="-1">
+        <aside class="run-sidebar" aria-labelledby="runs-heading">
+          <div class="sidebar-heading"><div><h1 id="runs-heading">Workspace</h1><p id="run-summary">Loading runs…</p></div><button id="new-run-button" class="button primary new-button" type="button" aria-label="New run">+ <span>New run</span></button></div>
+          <div class="list-tabs" role="tablist" aria-label="Run collection">
+            <button id="runs-tab" role="tab" aria-selected="true" aria-controls="run-list-panel" data-collection="runs" type="button">All runs <span id="all-count">0</span></button>
+            <button id="archives-tab" role="tab" aria-selected="false" aria-controls="run-list-panel" data-collection="archives" type="button" tabindex="-1">Archives <span id="archive-count">0</span></button>
+          </div>
+          <div class="list-controls"><label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 4.5 4.5"></path></svg><input id="run-search" type="search" placeholder="Find a run…" aria-label="Find a run"></label><label class="filter-label"><span class="sr-only">Filter run status</span><select id="run-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="attention">Needs input</option><option value="saved">Saved</option><option value="failed">Failed</option></select></label></div>
+          <div id="run-list-panel" class="run-list-panel" role="tabpanel" aria-labelledby="runs-tab"><div id="run-list" class="run-list"></div><div id="list-empty" class="list-empty" hidden></div></div>
+          <div class="sidebar-foot"><span id="capacity-label">Browser capacity unknown</span><button id="refresh-button" type="button" class="text-button">Refresh</button></div>
+        </aside>
+
+        <section id="run-detail" class="run-detail" aria-label="Selected run">
+          <div id="selection-empty" class="selection-empty"><div class="empty-browser" aria-hidden="true"><div><i></i><i></i><i></i></div><span></span><span></span></div><h2>A browser, ready for your workflow.</h2><p>Start a run to see its browser, follow each step, and save the session as a reusable profile.</p><button id="empty-new-button" class="button primary" type="button">Create your first run</button></div>
+          <div id="detail-content" class="detail-content" hidden>
+            <div class="detail-heading"><div class="detail-title-group"><div class="detail-kicker"><span id="detail-id"></span><span id="detail-created"></span></div><h2 id="detail-title"></h2></div><span id="detail-state" class="state-badge"></span></div>
+            <div class="run-toolbar"><div id="run-actions" class="run-actions"></div><span id="detail-duration" class="duration-label"></span></div>
+            <div id="run-error" class="notice warning" role="alert" hidden></div>
+            <section id="challenge-panel" class="challenge-panel" aria-labelledby="challenge-title" hidden><div><span class="status-dot warning"></span><h3 id="challenge-title">Input needed</h3></div><p id="challenge-description"></p><form id="challenge-form"><div id="challenge-fields" class="schema-fields"></div><p id="challenge-error" class="form-error" role="alert" hidden></p><button class="button primary small" type="submit">Send input and continue</button></form></section>
+
+            <section class="browser-panel" aria-label="Browser view">
+              <div class="browser-toolbar"><div class="browser-label"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18M7 6.5h.01M10 6.5h.01"></path></svg><span id="view-label">Browser snapshot</span><span id="view-indicator" class="view-indicator"></span></div><div class="browser-controls"><button id="snapshot-button" type="button" class="text-button">Refresh snapshot</button><button id="live-button" type="button" class="button outline small">Connect live</button><button id="fullscreen-button" type="button" class="button icon-button" aria-label="Make browser view fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"></path></svg></button></div></div>
+              <div id="browser-stage" class="browser-stage"><div id="browser-placeholder" class="browser-placeholder"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="9" width="34" height="27" rx="3"></rect><path d="M7 17h34M18 41h12M24 36v5"></path><circle cx="12" cy="13" r=".7"></circle><circle cx="16" cy="13" r=".7"></circle></svg><p id="browser-placeholder-text">The browser view appears when the run starts.</p></div><img id="browser-snapshot" alt="Most recent browser snapshot" hidden><div id="live-screen" hidden></div></div>
+              <div class="browser-foot"><span id="view-status" role="status">Snapshots are still images. Connect live to interact.</span><span id="snapshot-time"></span></div>
+            </section>
+
+            <div class="detail-lower"><section class="activity-panel" aria-labelledby="activity-title"><div class="section-heading"><h3 id="activity-title">Activity</h3><span id="activity-count"></span></div><ol id="activity-log" class="activity-log"></ol></section><aside class="session-panel" aria-labelledby="session-title"><div class="section-heading"><h3 id="session-title">Session</h3></div><dl id="session-facts" class="session-facts"></dl><div id="artifact-panel" class="artifact-panel" hidden></div><p id="save-explanation" class="small-note"></p></aside></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="new-run-dialog" class="drawer" aria-labelledby="new-run-title"><div class="drawer-shell"><header class="drawer-heading"><div><p>Start a workflow</p><h2 id="new-run-title">New run</h2></div><button type="button" class="button icon-button close-dialog" aria-label="Close new run">×</button></header><form id="new-run-form" class="drawer-form"><div class="drawer-body"><label for="automation-select">Automation</label><select id="automation-select" required></select><p id="automation-description" class="field-hint"></p><fieldset class="preset-fieldset"><legend>Interaction pace</legend><div class="preset-options"><label><input type="radio" name="preset" value="fast" checked><span><strong>Fast</strong><small>Direct actions</small></span></label><label><input type="radio" name="preset" value="natural"><span><strong>Natural</strong><small>Measured pace</small></span></label><label><input type="radio" name="preset" value="natural-fast"><span><strong>Natural fast</strong><small>Shorter pauses</small></span></label></div></fieldset><div class="form-section-heading"><h3>Inputs</h3><button id="input-mode-button" class="text-button" type="button">Edit as JSON</button></div><div id="input-fields" class="schema-fields"></div><div id="json-input-wrap" hidden><label class="sr-only" for="json-input">Automation inputs as JSON</label><textarea id="json-input" class="json-editor" spellcheck="false" rows="12">{}</textarea><p class="field-hint">A JSON object matching this automation’s input schema.</p></div><p id="no-inputs" class="small-note" hidden>This automation does not require inputs.</p><p class="secret-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>Credentials are sent to the run and cleared from this form.</p><p id="new-run-error" class="form-error" role="alert" hidden></p></div><footer class="drawer-footer"><button type="button" class="button outline close-dialog">Cancel</button><button id="create-run-button" class="button primary" type="submit">Start run</button></footer></form></div></dialog>
+
+    <dialog id="system-dialog" class="drawer system-drawer" aria-labelledby="system-title"><div class="drawer-shell"><header class="drawer-heading"><div><p>Connections & capacity</p><h2 id="system-title">System</h2></div><button type="button" class="button icon-button close-dialog" aria-label="Close system panel">×</button></header><div class="drawer-body"><section class="system-section"><div class="section-heading"><h3>Kameleo engine</h3><button id="refresh-system-button" type="button" class="text-button">Refresh</button></div><div id="engine-details"></div></section><section class="system-section"><div class="section-heading"><h3>Proxy inventory</h3><span id="proxy-count"></span></div><p class="field-hint">Saved connections available to your automations. Credentials stay on the server.</p><div id="proxy-list" class="proxy-list"></div></section></div><footer class="drawer-footer"><span class="small-note">Each live view controls its browser display.</span><button type="button" class="button outline close-dialog">Done</button></footer></div></dialog>
+
+    <div id="toast-region" class="toast-region" role="status" aria-live="polite" aria-atomic="true"></div>
+    <noscript><p class="noscript">Enable JavaScript to use the browser workbench.</p></noscript>
+  </body>
+</html>

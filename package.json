@@ -1,0 +1,54 @@
+{
+  "name": "kameleo-workbench",
+  "version": "0.1.0",
+  "description": "A script-driven workbench for headed Kameleo browsers, Puppeteer automation and verified profile exports.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/True-Utopian/kameleo-workbench.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./actions": "./dist/actions.js",
+    "./proxies": "./dist/proxies/index.js"
+  },
+  "bin": {
+    "kameleo-workbench": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file-if-exists=.env dist/cli.js serve",
+    "dev": "tsx --env-file-if-exists=.env src/cli.ts serve",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run build",
+    "smoke": "node --env-file-if-exists=.env scripts/smoke.mjs",
+    "smoke:proxy": "node --env-file-if-exists=.env scripts/proxy-smoke.mjs",
+    "token": "node --env-file-if-exists=.env dist/cli.js token",
+    "doctor": "node --env-file-if-exists=.env dist/cli.js doctor"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/static": "^10.1.5",
+    "@fastify/websocket": "^11.3.1",
+    "@kameleo/local-api-client": "5.2.0",
+    "@novnc/novnc": "^1.7.0",
+    "ajv": "^8.17.1",
+    "fastify": "5.12.5",
+    "https-proxy-agent": "^7.0.6",
+    "puppeteer-core": "25.12.0",
+    "socks-proxy-agent": "^8.0.5",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3"
+  }
+}
