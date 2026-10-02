@@ -14,6 +14,8 @@ COPY --from=build --chown=1001:1001 /app/node_modules ./node_modules
 COPY --from=build --chown=1001:1001 /app/dist ./dist
 COPY --chown=1001:1001 public ./public
 COPY --chown=1001:1001 automations ./automations
+COPY --chown=1001:1001 flows ./flows
+COPY --chown=1001:1001 schemas ./schemas
 COPY --chown=1001:1001 scripts ./scripts
 RUN mkdir -p /state /exports && chown 1001:1001 /state /exports
 USER 1001:1001

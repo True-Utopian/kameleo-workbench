@@ -1,6 +1,6 @@
 {
   "name": "kameleo-workbench",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A script-driven workbench for headed Kameleo browsers, Puppeteer automation and verified profile exports.",
   "type": "module",
   "private": true,
@@ -15,7 +15,10 @@
   "exports": {
     ".": "./dist/index.js",
     "./actions": "./dist/actions.js",
-    "./proxies": "./dist/proxies/index.js"
+    "./proxies": "./dist/proxies/index.js",
+    "./flows": "./dist/flows/index.js",
+    "./coordinator": "./dist/coordinator/index.js",
+    "./interaction": "./dist/interaction/index.js"
   },
   "bin": {
     "kameleo-workbench": "dist/cli.js"
@@ -30,7 +33,9 @@
     "smoke": "node --env-file-if-exists=.env scripts/smoke.mjs",
     "smoke:proxy": "node --env-file-if-exists=.env scripts/proxy-smoke.mjs",
     "token": "node --env-file-if-exists=.env dist/cli.js token",
-    "doctor": "node --env-file-if-exists=.env dist/cli.js doctor"
+    "doctor": "node --env-file-if-exists=.env dist/cli.js doctor",
+    "calibrate:interaction": "node scripts/calibrate-interaction.mjs",
+    "score:interaction": "node scripts/score-interaction.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
@@ -41,12 +46,15 @@
     "ajv": "^8.17.1",
     "fastify": "5.12.5",
     "https-proxy-agent": "^7.0.6",
+    "pg": "^8.23.1",
     "puppeteer-core": "25.12.0",
     "socks-proxy-agent": "^8.0.5",
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
     "@types/ws": "^8.18.1",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3"

@@ -15,8 +15,8 @@
       <div class="login-brand"><span class="brand-mark" aria-hidden="true">w</span> Browser workbench</div>
       <div class="login-panel">
         <div class="login-glyph" aria-hidden="true"><span></span><span></span><span></span></div>
-        <h1 id="login-title">Your browser workspace.</h1>
-        <p>Run an automation, work in the browser, and keep the profile for next time.</p>
+        <h1 id="login-title">Kameleo Workbench</h1>
+        <p>Sign in to start or resume a browser session.</p>
         <form id="login-form">
           <label for="access-token">Workbench access token</label>
           <input id="access-token" name="token" type="password" autocomplete="current-password" required placeholder="Enter your access token">
@@ -26,7 +26,7 @@
         </form>
         <p id="login-status" class="login-status" role="status">Checking your session…</p>
       </div>
-      <div class="login-foot">Headed browsers. Scripted workflows. Saved profiles.</div>
+      <div class="login-foot">Kameleo · Puppeteer · Profile storage</div>
     </section>
 
     <div id="workspace" class="workspace" hidden>
@@ -52,7 +52,7 @@
         </aside>
 
         <section id="run-detail" class="run-detail" aria-label="Selected run">
-          <div id="selection-empty" class="selection-empty"><div class="empty-browser" aria-hidden="true"><div><i></i><i></i><i></i></div><span></span><span></span></div><h2>A browser, ready for your workflow.</h2><p>Start a run to see its browser, follow each step, and save the session as a reusable profile.</p><button id="empty-new-button" class="button primary" type="button">Create your first run</button></div>
+          <div id="selection-empty" class="selection-empty"><div class="empty-browser" aria-hidden="true"><div><i></i><i></i><i></i></div><span></span><span></span></div><h2>No run selected</h2><p>Select a run or start one to open its browser and activity log.</p><button id="empty-new-button" class="button primary" type="button">Start a run</button></div>
           <div id="detail-content" class="detail-content" hidden>
             <div class="detail-heading"><div class="detail-title-group"><div class="detail-kicker"><span id="detail-id"></span><span id="detail-created"></span></div><h2 id="detail-title"></h2></div><span id="detail-state" class="state-badge"></span></div>
             <div class="run-toolbar"><div id="run-actions" class="run-actions"></div><span id="detail-duration" class="duration-label"></span></div>

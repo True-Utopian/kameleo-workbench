@@ -1,6 +1,40 @@
 # Validation record
 
-Tested on 1 October 2026. This records observed behavior, not a promise about every site, proxy vendor or host.
+The dated checks below record observed behavior. Earlier live results cover script mode; managed flows have their own implementation and integration checks.
+
+## Managed runtime, 2 October 2026
+
+The live checks used the Ubuntu 24.04 server, PostgreSQL 17, Node 24.21.0 and the pinned Kameleo Engine 5.3.1 container.
+
+- `scripts/flow-smoke.mjs` passed cold sign-in, reuse by identity ID, and anonymous-to-warm profile handoff. All three runs ended with the same persistent profile. Each downloaded archive matched its recorded SHA-256.
+- Those runs took 6.1 s, 3.0 s and 9.1 s respectively, including synthetic verification inputs and export. These are single observations with cached kernels, not latency percentiles.
+- `scripts/recovery-smoke.mjs` reached a verification prompt, then the workbench container was killed with SIGKILL while Engine and PostgreSQL stayed running. Startup reconciled and stopped the retained browser. Resume reclassified the restored page, accepted fresh inputs and saved a verified archive.
+- Two separate PostgreSQL connections raced for the last browser slot; only one acquired it. A second process could not take the node's advisory lock. The test used a separate database, which was removed afterward.
+- The full suite passed 85 tests on Windows and 85 on Linux, followed by a production build on each. The optional PostgreSQL test is skipped without a dedicated database URL; that test passed separately on the server. Production dependency audit reported no vulnerabilities.
+
+The browser tests caught and fixed a fixture selector mismatch, session-cookie loss on browser close, premature work after identity binding, and a transient handoff state reported as an interruption. Unit regressions cover the handoff and state reporting.
+
+Reproduce managed checks against an idle deployment with the test fixture enabled:
+
+```sh
+docker compose exec workbench node scripts/flow-smoke.mjs
+docker compose exec workbench node scripts/recovery-smoke.mjs prepare
+# Test environment only: interrupt the workbench while leaving Engine and PostgreSQL running.
+docker compose kill -s SIGKILL workbench
+docker compose up -d workbench
+# Wait for the workbench health check to pass.
+docker compose exec workbench node scripts/recovery-smoke.mjs resume
+```
+
+No human typing dataset, multi-node capacity load, database failover, cross-node profile migration or native Windows Kameleo browser run was tested. Managed proxy reuse has admission and health checks, but the live proxy result below belongs to script mode. The timing model ships with uncalibrated defaults and tools to fit and evaluate consented recordings.
+
+## Flow implementation, 2 October 2026
+
+`npx tsx --test test/flows.test.ts` passes 11 tests covering strict compilation, state/evidence recognition, blank/stale/ambiguous abstention, a complete synthetic sign-in flow, unavailable and changed choices, wrong identity receipts, durable-write failure, uncertain submission recovery without replay, and a durable handoff before post-bind work. The successful flow checks that passwords, codes, account values and receipts never appear in journal snapshots.
+
+These interpreter tests use a controlled driver to exercise state and storage behavior. The guarded browser executor has its own interaction tests; live Kameleo and PostgreSQL results are recorded above.
+
+## Script-mode baseline, 1 October 2026
 
 ## Environments
 

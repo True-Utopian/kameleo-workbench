@@ -1,5 +1,19 @@
 name: kameleo-workbench
 services:
+  database:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: workbench
+      POSTGRES_DB: workbench
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - coordinator-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workbench -d workbench"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
   volume-init:
     image: node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
     user: root
@@ -36,17 +50,29 @@ services:
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
       MAX_CONCURRENCY: "1"
       RUN_TIMEOUT_MS: ${RUN_TIMEOUT_MS:-600000}
+      DATABASE_URL: postgresql://workbench:${POSTGRES_PASSWORD}@database:5432/workbench
+      KAMELEO_TEAM_KEY: ${KAMELEO_TEAM_KEY:?Set a stable provider team key}
+      KAMELEO_BROWSER_BUDGET: ${KAMELEO_BROWSER_BUDGET:-1}
+      WORKBENCH_TENANT_ID: ${WORKBENCH_TENANT_ID:-}
+      ENABLE_TEST_FIXTURE: ${ENABLE_TEST_FIXTURE:-false}
+      FIXTURE_ORIGIN: ${FIXTURE_ORIGIN:-http://workbench:3180}
+      FLOW_POLICIES_FILE: ${FLOW_POLICIES_FILE:-}
+      IDLE_TIMEOUT_MS: ${IDLE_TIMEOUT_MS:-180000}
     ports:
       - "127.0.0.1:3180:3180"
     volumes:
       - workbench-state:/state
       - exports:/exports
       - ./automations:/app/automations:ro
+      - ./flows:/app/flows:ro
     depends_on:
       kameleo:
+        condition: service_healthy
+      database:
         condition: service_healthy
     restart: unless-stopped
 volumes:
   kameleo-data:
   workbench-state:
   exports:
+  coordinator-data:

@@ -8,6 +8,8 @@ export interface Config {
   inventoryFile: string; maxConcurrency: number; runTimeoutMs: number;
   publicOrigin?: string; secureCookie: boolean; vncUrl?: string; vncPassword?: string;
   embedOrigins: string[];
+  databaseUrl?: string; tenantId?: string; nodeId?: string; teamKey?: string; browserBudget?: number;
+  flowsDir?: string; flowPoliciesFile?: string; fixtureOrigin?: string; enableTestFixture?: boolean; idleTimeoutMs?: number;
 }
 
 function integer(value: string | undefined, fallback: number, min: number, max: number): number {
@@ -50,5 +52,10 @@ export async function loadConfig(env: NodeJS.ProcessEnv = process.env): Promise<
     maxConcurrency, runTimeoutMs: integer(env.RUN_TIMEOUT_MS, 600_000, 1_000, 86_400_000),
     publicOrigin, secureCookie: env.COOKIE_SECURE === 'true' || publicOrigin?.startsWith('https://') === true,
     vncUrl: env.KAMELEO_VNC_URL, vncPassword: env.VNC_PASSWORD, embedOrigins,
+    databaseUrl: env.DATABASE_URL, tenantId: env.WORKBENCH_TENANT_ID, nodeId: env.WORKBENCH_NODE_ID,
+    teamKey: env.KAMELEO_TEAM_KEY, browserBudget: integer(env.KAMELEO_BROWSER_BUDGET, 1, 1, 1000),
+    flowsDir: path.resolve(env.FLOWS_DIR ?? 'flows'), flowPoliciesFile: env.FLOW_POLICIES_FILE,
+    fixtureOrigin: env.FIXTURE_ORIGIN ? new URL(env.FIXTURE_ORIGIN).origin : undefined,
+    enableTestFixture: env.ENABLE_TEST_FIXTURE === 'true', idleTimeoutMs: integer(env.IDLE_TIMEOUT_MS, 180_000, 10_000, 86_400_000),
   };
 }

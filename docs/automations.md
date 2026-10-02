@@ -1,8 +1,8 @@
 # Writing automations
 
-An automation is a trusted ES module in `automations/`. The coordinator discovers modules at startup. Restart after adding or changing one. Run `npm run build` before using the included examples, which import `../dist/index.js`.
+Script mode loads trusted ES modules from `automations/` at startup. Leave `DATABASE_URL` unset to use this mode, and restart after changing a module. Run `npm run build` before using the included examples, which import `../dist/index.js`. Managed mode uses [declarative flows](flows.md) and a separate guarded executor.
 
-The framework owns profile creation, proxy allocation, lifecycle, input requests and export. Your script owns the website-specific actions and the condition that means success. Puppeteer attaches to the actual headed Kameleo Chroma profile; this is not a second unrelated browser.
+The runtime handles profile creation, proxy allocation, input requests and export. Your script defines website actions and the success condition. Puppeteer attaches to the headed Kameleo Chroma profile created for that run.
 
 ```js
 import { defineAutomation } from '../dist/index.js';
@@ -109,7 +109,7 @@ See the proxy documentation for provider configuration and verification scope. A
 
 ## Input pacing
 
-These presets control interaction timing and visible pointer motion. They do not promise human equivalence or website acceptance. Faster infrastructure startup and slower visible typing are separate choices.
+These script-helper presets control timing and visible pointer motion. Managed flows use the [interaction model](design/interaction-model.md); the table below describes `createActions`, not that model's distributions.
 
 | Setting | `fast` | `natural-fast` | `natural` |
 | --- | ---: | ---: | ---: |

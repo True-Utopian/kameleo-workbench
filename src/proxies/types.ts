@@ -1,5 +1,5 @@
 export type ProxyType = 'residential' | 'isp' | 'datacenter' | 'mobile';
-/** https means an HTTP CONNECT proxy supporting HTTPS destinations, not TLS to the proxy. */
+/** https uses HTTP CONNECT; the proxy connection itself is plaintext HTTP. */
 export type ProxyProtocol = 'http' | 'https' | 'socks5';
 export interface ProxyAttributes {
   type?: ProxyType;
@@ -28,7 +28,7 @@ export interface ProxyConnection {
 }
 export interface ProxyInventoryEntry extends ProxyConnectionInput {
   id: string;
-  /** e.g. static, nsocks. A label, not an API integration or independent verification. */
+  /** Operator label, such as static or nsocks. */
   source?: string;
   attributes?: ProxyAttributes;
   createdAt?: string;
@@ -45,7 +45,7 @@ export interface ProxyRequest extends ProxyAttributes {
   timeoutMs?: number;
   probeTimeoutMs?: number;
   minRemainingMs?: number;
-  /** These fields must be confirmed by a configured independent probe, not provider labels. */
+  /** Fields that the configured independent probe must confirm. */
   requireVerified?: (keyof ProxyAttributes)[];
   freshness?: { maxVerificationAgeMs?: number; maxInventoryAgeMs?: number; unusedForMs?: number };
   iproyal?: { lifetime?: string };

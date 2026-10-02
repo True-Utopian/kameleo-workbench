@@ -1,18 +1,18 @@
 # Kameleo Workbench
 
-A small control plane for your own headed browser automations. Give a script structured inputs, create a Kameleo profile, attach Puppeteer, inspect the browser, and save a verified `.kameleo` archive when the script finishes.
+Run headed Kameleo browsers from a web form or HTTP client. The workbench validates inputs, allocates a profile and optional proxy, runs the automation, and saves a verified `.kameleo` archive. Authenticated snapshots show active work; noVNC control is available during an acknowledged pause or input/completion wait.
 
-The script is the unit of extension. Write ordinary JavaScript with the full Puppeteer API; use the workbench for lifecycle, input forms, proxy allocation, live viewing and exports.
+Choose one runtime per deployment. **Script mode** loads trusted JavaScript modules and exposes Puppeteer directly. **Managed mode** loads declarative JSON flow packs and uses PostgreSQL for flow checkpoints, identity/profile ownership, fenced leases and archive metadata. Set `DATABASE_URL` to enable managed mode; leave it unset for scripts.
 
 ```text
 Web form / HTTP client
         │ validated inputs
         ▼
-Automation module → profile settings + proxy policy
+Script or JSON flow → profile settings + proxy policy
         │
         ▼
 Headed Kameleo browser ← live display / follow-up inputs
-        │ script calls done()
+        │ explicit completion
         ▼
 Disconnect → stop → export → verify file → SHA-256 → saved
 ```
@@ -20,15 +20,17 @@ Disconnect → stop → export → verify file → SHA-256 → saved
 ## What is included
 
 - An authenticated web workbench and HTTP API, with a queue and per-run events.
-- Puppeteer scripts with JSON Schema inputs, follow-up input challenges, cooperative pause, cancellation and a worker deadline.
+- Puppeteer scripts and finite JSON flows with JSON Schema inputs, follow-up challenges, cooperative pause, cancellation and deadlines.
+- Main-frame URL/DOM state recognition, explicit refinement, ambiguity handling and fresh evidence before managed browser input.
+- Opaque verification choices, exact fill readback, identity receipt checks and durable action intent. An uncertain submission requires reconciliation instead of automatic replay.
 - `fast`, `natural-fast` and `natural` pacing, plus custom timings. Raw Puppeteer is always available.
 - Per-input profile and proxy hooks; local, persistent Kameleo profiles.
 - Imported HTTP/SOCKS5 proxies, IPRoyal sticky residential credentials, and a custom provider interface.
-- Proxy constraints for type, location, ISP/ASN, expiry, latency, freshness and independent verification. Active runs cannot lease the same observed exit IP in this process.
+- Proxy constraints for type, location, ISP/ASN, expiry, latency, freshness and independent verification. Observed exit IPs are reserved across managed nodes sharing a quota; script mode reserves them within one process.
 - Authenticated noVNC viewing for a private Linux Kameleo display; screenshots and the native Kameleo window on Windows.
-- Atomic run metadata, retained profiles after errors, retryable exports, and archive checksums.
+- PostgreSQL coordination for managed flows, plus local metadata for script runs. Both retain original profiles after failures and verify archive checksums.
 
-This is a single-owner workbench. It does not include team accounts, distributed scheduling, a marketplace of site logins, CAPTCHA solving, or a guarantee that sites will accept automation. An authenticated operator can control browsers and download their sessions. Install only scripts you trust.
+The HTTP interface has one administrator token. Managed coordination scopes records by tenant and node, but it does not add user accounts or per-user permissions to the dashboard. Each shared VNC desktop remains an administrator trust boundary. Install only trusted scripts, packs and resolver policies.
 
 ## Start locally
 
@@ -52,14 +54,14 @@ Copy `.env.example` to `.env` to change settings. The same Node commands work in
 
 ## Start with Docker
 
-Copy `.env.example` to `.env`, set `KAMELEO_PAT` and a random `VNC_PASSWORD`, then run:
+Copy `.env.example` to `.env` and set `KAMELEO_PAT`, `VNC_PASSWORD`, `POSTGRES_PASSWORD` and `KAMELEO_TEAM_KEY`. Use the same team key on installations that share a Kameleo quota. The database password must be URL-safe because Compose embeds it in the connection URL. Leave `ENABLE_TEST_FIXTURE=true` for the included synthetic flow, then run:
 
 ```sh
 docker compose up -d --build
 docker compose exec workbench node dist/cli.js token
 ```
 
-Open **http://127.0.0.1:3180**. In the demo use `http://workbench:3180/demo`, since the browser runs in a different container. The included Compose stack keeps the Engine API and VNC private and publishes only the workbench on loopback. It pins the tested images by digest and uses persistent volumes for kernels, profiles, state and exports.
+Open **http://127.0.0.1:3180** and choose the owned-site sign-in flow. Use any test username, password `test-password`, and code `123456`. Compose enables managed mode with PostgreSQL and gives the browser fixture origin `http://workbench:3180`. The stack keeps Engine/VNC/database ports private and publishes the workbench on loopback. Persistent volumes hold kernels, profiles, coordinator data, service state and exports.
 
 On a remote server, forward the workbench port:
 
@@ -67,7 +69,24 @@ On a remote server, forward the workbench port:
 ssh -L 3180:127.0.0.1:3180 your-server
 ```
 
-See [deployment](docs/deployment.md) for shared export paths, proxy credentials, TLS and recovery.
+See [deployment](docs/deployment.md) for managed-mode configuration, shared export paths, TLS and recovery.
+
+## Run a managed flow
+
+Managed mode needs PostgreSQL, a stable node identity, a Kameleo team quota key and installed execution policies. The included owned-site pack exercises username/password entry, a verification-method choice, a code prompt, authenticated identity binding and export. It uses synthetic test credentials on the local fixture.
+
+```dotenv
+DATABASE_URL=postgresql://workbench:your-local-password@127.0.0.1:5432/workbench
+KAMELEO_TEAM_KEY=your-shared-team-key
+KAMELEO_BROWSER_BUDGET=1
+FLOWS_DIR=flows
+ENABLE_TEST_FIXTURE=true
+FIXTURE_ORIGIN=http://127.0.0.1:3180
+```
+
+Use the origin reachable by the Kameleo browser; inside Compose that is normally `http://workbench:3180`. Restart the service after configuring it, choose the owned-site flow, and use a test username, password `test-password`, and code `123456`. The fixture is enabled only with `ENABLE_TEST_FIXTURE=true`.
+
+The [flow guide](docs/flows.md) describes pack compilation, the browser adapter, durable checkpoints, recovery and the resolver contract. The [architecture](docs/design/architecture.md) records the broader coordination design and the remaining qualification work. Its capacity figures are sizing examples, not measured throughput.
 
 ## Write an automation
 
@@ -97,13 +116,15 @@ export default defineAutomation({
 
 `done()` ends the script and requests a verified export. Returning normally is incomplete. Use `waitForFinish()` if a human should inspect the page and click **Finish + save**. A failing script retains its original profile for inspection.
 
-Pacing changes typing and pointer timing; it does not make automation indistinguishable from a person. Cold browser/kernel downloads can take minutes. Reusing the kernel cache reduces startup time, but proxy availability and account quotas still apply.
+Managed flows use the guarded interaction executor for typing, pointer movement and exact fill readback. Its timing model can be calibrated from consented synthetic-task traces. The bundled defaults have not been fitted to human traces. Cold kernel downloads, proxy availability and account quotas still affect startup.
 
 ## Documentation
 
 | Topic | Reference |
 | --- | --- |
 | Scripts, profile hooks, pacing, challenges | [Automation guide](docs/automations.md) |
+| State registries, declarative flows and recovery | [Flow guide](docs/flows.md) |
+| Coordination, identity binding and capacity | [Architecture](docs/design/architecture.md) |
 | Providers, constraints, health and uniqueness | [Proxy guide](docs/proxies.md) |
 | Workbench, inspection and run controls | [Workbench guide](docs/workbench.md) |
 | Windows, Linux, Docker and recovery | [Deployment guide](docs/deployment.md) |

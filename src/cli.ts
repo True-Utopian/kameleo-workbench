@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { loadConfig } from './config.js';
 import { Runtime } from './runtime.js';
 import { ProxyManager } from './proxies/index.js';
 import { createServer } from './server.js';
+import { ManagedRuntime } from './managed/runtime.js';
+import { durableWrite, stableId } from './managed/storage.js';
+import { fixturePolicies } from './fixture.js';
+import type { FlowPolicies } from './managed/policies.js';
 
 async function main() {
   const command = process.argv[2] ?? 'serve';
@@ -32,7 +39,24 @@ async function main() {
     console.log(JSON.stringify({ id: run.id, state: run.state }, null, 2)); return;
   }
   const proxies = new ProxyManager({ inventoryFile: config.inventoryFile });
-  const runtime = new Runtime({ ...config, proxies });
+  let runtime: Runtime | ManagedRuntime;
+  if (config.databaseUrl) {
+    if (!config.teamKey) throw new Error('KAMELEO_TEAM_KEY is required with DATABASE_URL. Use the same team key on every install sharing the provider cap.');
+    let nodeId = config.nodeId || undefined;
+    if (!nodeId) {
+      const file = join(config.dataDir, 'node-id');
+      try { nodeId = (await readFile(file, 'utf8')).trim(); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; nodeId = randomUUID(); await durableWrite(file, nodeId); }
+    }
+    let policies: FlowPolicies = { profiles: {}, proxies: {}, identities: {} };
+    if (config.enableTestFixture && config.fixtureOrigin) policies = fixturePolicies(config.token, config.fixtureOrigin);
+    if (config.flowPoliciesFile) {
+      const loaded = await import(pathToFileURL(resolve(config.flowPoliciesFile)).href);
+      const custom = loaded.default as FlowPolicies;
+      policies = { profiles: { ...policies.profiles, ...custom.profiles }, proxies: { ...policies.proxies, ...custom.proxies }, identities: { ...policies.identities, ...custom.identities } };
+    }
+    runtime = new ManagedRuntime({ ...config, databaseUrl: config.databaseUrl, tenantId: config.tenantId || stableId('workbench:default-tenant'), nodeId, teamKey: config.teamKey, browserBudget: config.browserBudget!, flowsDir: config.flowsDir!, idleTimeoutMs: config.idleTimeoutMs!, policies, proxies });
+  } else runtime = new Runtime({ ...config, proxies });
   await runtime.init();
   if (command === 'list') { console.log(JSON.stringify(runtime.listAutomations(), null, 2)); await runtime.close(); return; }
   if (command !== 'serve') { await runtime.close(); throw new Error('Unknown command. Use --help.'); }

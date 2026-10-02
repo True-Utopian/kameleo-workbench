@@ -67,7 +67,7 @@ function disconnectLive({ reset = true } = {}) {
   $('live-screen').replaceChildren();
   $('live-screen').hidden = true;
   $('live-button').textContent = 'Connect live';
-  $('live-button').disabled = !ACTIVE.has(selectedRun()?.state);
+  $('live-button').disabled = !canInteract(selectedRun());
   $('view-label').textContent = 'Browser snapshot';
   $('view-indicator').classList.remove('live');
   if (reset) {
@@ -245,6 +245,10 @@ function renderDetail() {
   appendFact(facts, 'Status', STATE_LABELS[run.state] || run.state);
   appendFact(facts, 'Pace', ({ fast: 'Fast', natural: 'Natural', 'natural-fast': 'Natural fast' })[run.preset] || 'Script default');
   if (run.profileId) appendFact(facts, 'Profile', shortId(run.profileId));
+  if (run.flowState) appendFact(facts, 'Page state', run.flowState);
+  if (run.stepId) appendFact(facts, 'Step', run.stepId);
+  if (run.waitReason) appendFact(facts, 'Waiting', run.waitReason.replaceAll('_', ' '));
+  if (run.identityId) appendFact(facts, 'Identity', run.identityId);
   appendFact(facts, 'Updated', timeOf(run.updatedAt));
   const artifact = $('artifact-panel'); artifact.replaceChildren();
   artifact.hidden = !(run.artifact && run.state === 'saved');
@@ -256,7 +260,7 @@ function renderDetail() {
   $('save-explanation').textContent = needsCleanupRecovery(run) ? 'Browser capacity remains reserved until shutdown is confirmed. Recovery does not rerun the automation.' : run.state === 'saved' ? 'The profile export is ready to download.' : run.state === 'export_failed' ? 'The run finished, but its profile export needs another attempt.' : run.state === 'interrupted' ? 'The run was interrupted. Retry export to recover its retained profile.' : run.waitingForFinish ? 'Finish when you are done in the browser. The profile will then be saved.' : run.state === 'cancelled' ? 'This run was cancelled. No verified export is available.' : 'A completed run saves its browser profile for reuse.';
   const active = ACTIVE.has(run.state);
   $('snapshot-button').disabled = !active || state.screenshotBusy;
-  $('live-button').disabled = !active || state.livePending;
+  $('live-button').disabled = !canInteract(run) || state.livePending;
   if (!active && (state.rfb || state.livePending)) disconnectLive();
   if (state.rfb) {
     state.rfb.viewOnly = !canInteract(run);
@@ -275,11 +279,12 @@ function renderActions(run) {
   const actions = $('run-actions'); actions.replaceChildren();
   if (run.waitingForFinish && ACTIVE.has(run.state)) actions.append(actionButton('Finish & save', 'finish', 'primary'));
   if (run.state === 'paused' || run.pauseRequested) actions.append(actionButton(run.state === 'paused' ? 'Resume' : 'Undo pause', 'resume'));
+  else if (run.managed && run.state === 'interrupted') actions.append(actionButton('Resume flow', 'resume'));
   else if (run.state === 'running' && !run.waitingForFinish) actions.append(actionButton('Pause', 'pause'));
   if (run.profileId && (run.state === 'export_failed' || run.state === 'interrupted' || needsCleanupRecovery(run))) actions.append(actionButton('Retry export', 'retry-export', 'primary'));
   if (IN_PROGRESS.has(run.state) && run.state !== 'saving') actions.append(actionButton('Cancel run', 'cancel', 'quiet danger'));
   if (!IN_PROGRESS.has(run.state)) {
-    const again = el('button', 'button outline small', 'New run with this script'); again.type = 'button'; again.addEventListener('click', () => openNewRun(run.automationId)); actions.append(again);
+    const again = el('button', 'button outline small', 'New run'); again.type = 'button'; again.addEventListener('click', () => openNewRun(run.automationId)); actions.append(again);
   }
   if (!actions.children.length) actions.append(el('span', 'small-note', run.state === 'saving' ? 'Exporting and verifying the profile…' : 'No actions available.'));
 }
@@ -325,7 +330,7 @@ function buildFields(container, rawSchema, prefix) {
     if (Array.isArray(field.enum)) {
       control = el('select');
       const empty = el('option', '', 'Select a value'); empty.value = ''; control.append(empty);
-      field.enum.forEach((value, optionIndex) => { const option = el('option', '', typeof value === 'string' ? value : JSON.stringify(value)); option.value = String(optionIndex); control.append(option); });
+      field.enum.forEach((value, optionIndex) => { const label = field.oneOf?.find(item => item.const === value)?.title; const option = el('option', '', label || (typeof value === 'string' ? value : JSON.stringify(value))); option.value = String(optionIndex); control.append(option); });
       control.dataset.enum = JSON.stringify(field.enum);
       if (field.default !== undefined && !secretField(name, field)) { const defaultIndex = field.enum.findIndex(item => JSON.stringify(item) === JSON.stringify(field.default)); if (defaultIndex >= 0) control.value = String(defaultIndex); }
     } else if (type === 'boolean') {

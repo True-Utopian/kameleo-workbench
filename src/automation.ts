@@ -12,7 +12,7 @@ export interface AutomationContext {
   log(message: string): void;
   checkpoint(): Promise<void>;
   requestInput(title: string, fields: JsonSchema): Promise<Record<string, unknown>>;
-  /** Explicit completion: disconnects, stops and exports. This does not return. */
+  /** Disconnect, stop and export. This promise does not return normally. */
   done(): Promise<never>;
   /** Leave the browser open until the operator clicks Done. */
   waitForFinish(): Promise<never>;
@@ -23,9 +23,9 @@ export interface Automation {
   description?: string;
   inputSchema?: JsonSchema;
   preset?: PacePreset;
-  /** Executed on the trusted coordinator. Return Kameleo CreateProfileRequest fields. */
+  /** Return Kameleo CreateProfileRequest fields on the trusted coordinator. */
   profile?: (context: { inputs: Record<string, unknown>; runId: string; signal: AbortSignal }) => Promise<Record<string, unknown>> | Record<string, unknown>;
-  /** Return a ProxyManager allocation request, not purchased bandwidth. */
+  /** Return a ProxyManager allocation request for existing proxy service. */
   proxy?: (context: { inputs: Record<string, unknown>; runId: string; signal: AbortSignal }) => Promise<Record<string, unknown>> | Record<string, unknown>;
   run(context: AutomationContext): Promise<void>;
 }

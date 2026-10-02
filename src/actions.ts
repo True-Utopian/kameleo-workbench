@@ -21,7 +21,7 @@ export interface Actions {
   setPace(preset: PacePreset): void;
   checkpoint(): Promise<void>;
 }
-/** Cooperative helpers. Raw Puppeteer remains available and must call checkpoint to pause. */
+/** Script helpers check cooperative pause and cancellation at action boundaries. */
 export function createActions(page: Page, options: { preset?: PacePreset; signal?: AbortSignal; checkpoint?: () => Promise<void>; random?: () => number } = {}): Actions {
   let pace = resolvePace(options.preset);
   let pointer = { x: 0, y: 0 };

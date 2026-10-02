@@ -17,13 +17,28 @@ Set these values in an untracked `.env`:
 ```dotenv
 KAMELEO_PAT=your-personal-access-token
 VNC_PASSWORD=your-random-display-password
+POSTGRES_PASSWORD=your-url-safe-database-password
+KAMELEO_TEAM_KEY=your-stable-provider-team-key
+ENABLE_TEST_FIXTURE=true
 ```
 
 Generate a long random access token in `WORKBENCH_TOKEN`, or leave it blank and use the generated one. The VNC password travels only between the authenticated owner and private display; classic VNC authentication uses at most eight characters. The workbench's long access token is the external access control.
 
-Run `docker compose up -d --build`. The Engine has no host port mappings. The workbench is available on `127.0.0.1:3180`. On a remote host, use an SSH tunnel or an authenticated HTTPS reverse proxy.
+Run `docker compose up -d --build`. Compose starts PostgreSQL and managed mode. Keep `POSTGRES_PASSWORD` URL-safe because it is embedded in `DATABASE_URL`. The Engine and database have no host port mappings. The workbench is available on `127.0.0.1:3180`. On a remote host, use an SSH tunnel or an authenticated HTTPS reverse proxy.
 
-The pinned image currently runs as UID 1001 (checked from the image, rather than relying on a documentation example). Both containers share an export volume owned by that UID. If you change the image, inspect its runtime UID and update the workbench user/volume initialization together.
+The pinned image runs as UID 1001. Both containers share an export volume owned by that UID. If you change the image, inspect its runtime UID and update the workbench user/volume initialization together.
+
+## Managed mode
+
+Set `DATABASE_URL` to enable the PostgreSQL coordinator and JSON flow interpreter. Without it, the service loads trusted scripts from `AUTOMATIONS_DIR`. The two modes share the HTTP workbench but have different storage and recovery behavior.
+
+Managed startup applies coordinator migrations, acquires an exclusive database lock for the node, loads and compiles packs from `FLOWS_DIR`, and reconciles retained leases before admitting new work. Use a stable `WORKBENCH_NODE_ID` for a worker across restarts; if omitted, a UUID is saved in the private data directory. Never mount the same node state volume into two active workers.
+
+All workers sharing a Kameleo provider quota must use the same `KAMELEO_TEAM_KEY`, database and browser budget. Tenant identity and provider quota identity are separate configuration values. The dashboard still has one administrator token per deployment; tenant-scoped database records do not create dashboard user accounts.
+
+The owned-site fixture requires `ENABLE_TEST_FIXTURE=true` and `FIXTURE_ORIGIN` set to the exact origin reachable from the browser. It installs test profile/proxy/receipt policies. For an application integration, install trusted policy code through `FLOW_POLICIES_FILE`, exporting profile, proxy and authenticated identity resolver functions. See [declarative flows](flows.md) for the contract.
+
+Managed inputs are held in a private local vault for the admitted flow, separate from its PostgreSQL checkpoint. Back up and protect the vault key/state with the service account. Challenges, captured page values and identity receipts stay in memory. The flow journal records action intent and outcomes without field values.
 
 ## Export paths
 
@@ -66,6 +81,16 @@ Archives contain browser sessions, cookies and site data. Protect backups accord
 | `COOKIE_SECURE` | True for HTTPS origin | Restrict cookie to HTTPS |
 | `EMBED_ORIGINS` | Empty | Comma-separated allowed iframe parent origins |
 | `WORKBENCH_URL` | `http://127.0.0.1:3180` | Destination of CLI `run` submissions |
+| `DATABASE_URL` | Unset | Enable managed mode and connect to PostgreSQL |
+| `FLOWS_DIR` | `flows` | JSON packs and matching trusted manifests |
+| `FLOW_POLICIES_FILE` | Unset | Trusted ES module supplying managed execution policies |
+| `WORKBENCH_TENANT_ID` | Stable default tenant | Tenant scope for this administrator deployment |
+| `WORKBENCH_NODE_ID` | Generated and persisted | Stable worker identity |
+| `KAMELEO_TEAM_KEY` | Required in managed mode | Shared provider quota identity |
+| `KAMELEO_BROWSER_BUDGET` | `1` | Managed browser admission budget for the shared quota |
+| `IDLE_TIMEOUT_MS` | `180000` | Managed idle/manual-wait timeout |
+| `ENABLE_TEST_FIXTURE` | `false` | Enable the synthetic sign-in fixture and its policies |
+| `FIXTURE_ORIGIN` | Unset | Exact browser-reachable origin of that fixture |
 
 Proxy provider environment variables are in [the proxy guide](proxies.md). To supply a private inventory in Compose, add a read-only mount at `/app/proxy-inventory.json`. Add provider secrets through a private Compose override or secret manager; never put them into a committed automation.
 
@@ -73,7 +98,9 @@ Proxy provider environment variables are in [the proxy guide](proxies.md). To su
 
 The Linux container has one shared desktop. Live viewing therefore requires `MAX_CONCURRENCY=1`. A queued run gets the display after the previous run has stopped. Viewer connections are closed when their run ends. Do not start unrelated profiles manually in that same Engine: they would share its desktop.
 
-For parallel viewing, run separate workbench/Engine pairs with separate data volumes and ports. An in-process proxy lease cannot guarantee uniqueness across those instances; use a shared allocator if that is required. This version deliberately has no distributed lease database or team permissions.
+The gateway opens noVNC only while the run is paused, awaiting input or waiting for operator completion. Resume closes that control connection. Use snapshots while automation runs; a client-side read-only flag alone would not prevent a modified VNC client from sending competing input.
+
+For parallel viewing, run separate worker/Engine pairs with separate displays, data volumes and ports. Managed workers share the PostgreSQL coordinator and quota key. The managed runtime claims each verified proxy exit in the coordinator before profile creation and releases it after confirmed stop. Script-mode ProxyManager reservations remain process-local. Database coordination does not isolate windows on a shared VNC desktop.
 
 Pause is cooperative. Action helpers check the pause flag before acting. When using raw Puppeteer, insert `await checkpoint()` at safe boundaries. Wait for the run to say **paused** before manual input. A pending pause is not proof that the browser has stopped executing commands.
 
@@ -85,7 +112,11 @@ Browser sessions use an HttpOnly, SameSite=Strict cookie and expire after 12 hou
 
 ## Shutdown and recovery
 
-SIGINT/SIGTERM stops active workers and their profiles. After an abrupt restart, nonterminal run records become `interrupted`; inputs are intentionally not persisted or replayed. Inspect the original profile before retrying an export. The workbench never automatically reruns a form submission or login after a crash.
+SIGINT/SIGTERM stops active workers and their profiles. In script mode, an abrupt restart marks nonterminal run records `interrupted`; submitted inputs are not persisted or replayed. Inspect the original profile before retrying an export.
+
+Managed mode persists lease, lifecycle-operation and flow records. Restart reconciliation stops or quarantines uncertain browsers and retains their reservations until there is stop evidence. A flow checkpoint alone does not authorize reattachment or replay. Resume can continue an eligible retained flow while its deadline and private input vault remain valid; the coordinator must establish ownership before the interpreter reclassifies the page. Unresolved effects still require receipt reconciliation. Retry export handles eligible retained profiles only after lifecycle and flow operations are resolved.
+
+Submitted managed inputs are encrypted in the node's private state volume. Inactive input envelopes are removed when their flow deadline expires; saved and cancelled runs remove them sooner. Follow-up codes stay in memory. Stored proxy credentials belong to the profile and are kept separately for health checks on warm reuse. Keep the vault key with the state backup and restrict access to both.
 
 Restart after changing automation modules. Back up the state and profile volumes together. Rotate the workbench token by changing `WORKBENCH_TOKEN` and restarting; existing sessions then become invalid. Kameleo PAT changes require restarting the Engine.
 

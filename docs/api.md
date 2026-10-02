@@ -1,6 +1,6 @@
 # HTTP API
 
-The API accepts structured inputs, not uploaded scripts. An administrator installs trusted modules on disk; clients choose one by ID. Every `/api/` route except login requires authentication.
+The API accepts structured inputs for an installed script or flow pack. An administrator installs those definitions on disk; clients choose one by ID. Every `/api/` route except login requires authentication.
 
 Use `Authorization: Bearer <WORKBENCH_TOKEN>` from a trusted backend or CLI. Browser clients should POST `{ "token": "…" }` to `/api/login` and use the returned HttpOnly cookie. Do not put the token in a URL.
 
@@ -23,7 +23,7 @@ if (!response.ok) throw new Error(`Submission failed: ${response.status}`);
 const run = await response.json();
 ```
 
-Inputs are checked against the module's JSON Schema. They remain in memory until the run ends and are passed to its worker over local IPC. The workbench does not save them in run records. Scripts still control what gets entered into websites and stored by the browser. Avoid logging secrets yourself. `preset` accepts a named preset or the bounded custom timing object described in the automation guide.
+Inputs are checked against the installed definition's JSON Schema. Script mode keeps them in memory and sends them to the worker over local IPC. Managed mode uses its private input vault while the flow is admitted; PostgreSQL checkpoints and public run records contain no field values. Browser state can still retain submitted data. `preset` accepts a named preset or the bounded custom timing object described in the automation guide.
 
 POST submissions are **not idempotent**: each accepted request creates a new run. Record the returned ID; do not automatically repeat an uncertain submission.
 
@@ -40,12 +40,13 @@ POST submissions are **not idempotent**: each accepted request creates a new run
 | `POST /api/runs` | `{automationId, inputs, preset?}` → run, HTTP 202 |
 | `GET /api/runs` | Runs in reverse creation order |
 | `GET /api/runs/:id` | One run record |
+| `GET /api/runs/:id/evidence` | Managed recognition evidence and coordinator events; empty for script mode |
 | `POST /api/runs/:id/pause` | Request pause at the next checkpoint |
-| `POST /api/runs/:id/resume` | Continue a paused run |
+| `POST /api/runs/:id/resume` | Continue a paused run; managed mode can reconcile an eligible retained flow |
 | `POST /api/runs/:id/cancel` | Terminate script, stop browser, retain profile |
 | `POST /api/runs/:id/finish` | Finish a script that called `waitForFinish()` |
 | `POST /api/runs/:id/input` | `{challengeId, values}` → answer current challenge |
-| `POST /api/runs/:id/retry-export` | Retry a failed/interrupted export |
+| `POST /api/runs/:id/retry-export` | Retry an eligible retained export after unresolved operations are cleared |
 | `GET /api/runs/:id/artifact` | Download a verified `.kameleo` archive |
 | `GET /api/runs/:id/screenshot` | Current page JPEG, while active |
 | `GET /api/runs/:id/view` | Live-view availability and connection settings |
@@ -55,6 +56,8 @@ POST submissions are **not idempotent**: each accepted request creates a new run
 | `GET /api/events` | SSE `run` events containing changed run records |
 
 Errors use `{ "error": "…" }`. Request bodies are limited to 256 KiB. Login attempts are limited per remote address. General upstream errors are intentionally sanitized.
+
+Managed mode lists JSON packs through the same `/api/automations` route. Its run records may also expose `flowState`, `stepId`, `identityId` and `waitReason`. These describe observed page state, interpreter position and coordination separately from the run lifecycle. The managed coordinator's durable events are separate from the SSE notification channel.
 
 ## Run states
 
@@ -68,4 +71,4 @@ Follow-up input is represented by `challenge: {id, title, fields}`. `fields` is 
 
 The browser uses `EventSource('/api/events')` with its cookie. Listen for named `run` events. Events are notifications, not a durable event log: after reconnecting, fetch `/api/runs` to reconcile current state.
 
-An external app can submit inputs, poll its run ID, render a challenge and download the resulting archive. The game renderer is outside this repository. For live viewing, use the provided workbench on the same trusted origin or build an authenticated session broker. Profile archives, screenshots and display credentials are sensitive owner-only data.
+An external app can submit inputs, poll its run ID, render a challenge and download the resulting archive. Custom game rendering is outside this repository. For live viewing, use the provided workbench on the same trusted origin or a server-side session broker. Profile archives, screenshots and display credentials require administrator authorization.

@@ -91,7 +91,7 @@ Every allocation probes again. Inventory age means entry creation time, not the 
 
 Connection reservations happen before probing; exit-IP check-and-reserve is atomic after probing in the Node process. IPv6 representations are normalized, including IPv4-mapped addresses. Leases remain reserved until explicit `release`, even after their expected expiry, to avoid assigning resources while the old browser may still be active. Release is idempotent and does not reset any provider sessions.
 
-This is **local exclusivity at allocation**, not provider-wide exclusivity or permanent uniqueness. Another customer may share an exit, a provider can change routing, and two server processes do not share these maps. Run one manager owner for the solo deployment. Multi-process deployment needs a shared transactional lease store and browser recovery before releasing stale claims. Usage history is in memory and resets at process restart. Unknown live browsers must be reconciled by the session supervisor before new runs start after a crash.
+`ProxyManager` provides local exclusivity at allocation. Managed mode additionally claims the verified exit IP in PostgreSQL before creating a profile and releases that claim after a confirmed stop. Workers using that coordinator cannot hold the same claimed exit concurrently. This does not establish provider-wide exclusivity or permanent IP stability: another customer may share an exit and a provider may change routing. Script-mode processes do not share claims. Local usage history resets at process restart, while managed claims survive for lifecycle reconciliation.
 
 ## Custom providers
 

@@ -104,7 +104,7 @@ export class Runtime extends EventEmitter {
       try {
         if (!record.profileId && this.engine.findByRunId) {
           const found = await this.bounded(this.engine.findByRunId(id));
-          if (!found) { record.cleanupRequired = false; this.blockedRuns.delete(id); continue; }
+          if (!found) throw new Error('An earlier profile creation may still be pending');
           record.profileId = found.id;
         }
         if (!record.profileId) throw new Error('Unknown browser state');

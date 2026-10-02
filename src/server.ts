@@ -11,22 +11,27 @@ import type { ServerResponse } from 'node:http';
 import { AccessControl } from './auth.js';
 import type { Config } from './config.js';
 import type { PacePreset } from './actions.js';
+import { registerFixture } from './fixture.js';
+import { prepareAssets } from './assets.js';
 
 // The interface makes API tests independent of a running, licensed engine.
 export interface WorkbenchRuntime {
   listAutomations(): unknown;
-  submit(input: { automationId: string; inputs: Record<string, unknown>; preset?: PacePreset }): unknown;
+  submit(input: { automationId: string; inputs: Record<string, unknown>; preset?: PacePreset; identityId?: string }): unknown;
   list(): any[];
   get(id: string): any;
   cancel(id: string): unknown; pause(id: string): unknown; resume(id: string): unknown;
   retryExport(id: string): unknown; done(id: string): unknown;
   provideInput(id: string, challengeId: string, values: Record<string, unknown>): unknown;
   screenshot(id: string): Promise<Buffer>;
+  evidence?(id: string): Promise<unknown>;
+  stats?(): Promise<unknown>;
   on(event: string, fn: (...args: any[]) => void): unknown;
   off(event: string, fn: (...args: any[]) => void): unknown;
 }
 export interface WorkbenchProxies { publicInventory(): unknown; check?(id: string): Promise<unknown> }
 const activeStates = new Set(['running', 'paused', 'awaiting_input']);
+const canControl = (run: any) => run && activeStates.has(run.state) && (run.state === 'paused' || run.state === 'awaiting_input' || run.waitingForFinish === true);
 const paceSchema = { anyOf: [
   { enum: ['fast', 'natural', 'natural-fast'] },
   { type: 'object', additionalProperties: false, properties: Object.fromEntries(['typingDelayMs', 'typingJitterMs', 'actionDelayMs', 'actionJitterMs', 'pointerDurationMs', 'clickDelayMs'].map(key => [key, { type: 'number', minimum: 0, maximum: 10000 }]).concat([['pointerSteps', { type: 'integer', minimum: 1, maximum: 100 }]])) },
@@ -37,9 +42,11 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
   const app = Fastify({ logger: false, bodyLimit: 256 * 1024, trustProxy: false });
   const access = new AccessControl(config.token);
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const assets = await prepareAssets(path.join(root, 'public'), path.join(config.dataDir, 'assets'));
   const viewers = new Map<WebSocket, { id: string; session?: string; bearer?: string }>();
   const streams = new Map<ServerResponse, { session?: string; close: () => void }>();
   await app.register(cookie);
+  if (config.enableTestFixture) await registerFixture(app, config.token);
   await app.register(websocket, { options: { maxPayload: 2 * 1024 * 1024 } });
   const authenticate = (request: FastifyRequest) => {
     const header = request.headers.authorization;
@@ -86,15 +93,16 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
     let ready = false;
     try { ready = (await fetch(`${config.engineUrl}/general/healthcheck`, { signal: AbortSignal.timeout(2500) })).ok; } catch {}
     const runs = runtime.list();
-    return { engine: { ready, ...(!ready ? { error: 'Engine is not ready.' } : {}) }, config: { maxConcurrency: config.maxConcurrency }, stats: { total: runs.length, active: runs.filter(run => activeStates.has(run.state)).length, saved: runs.filter(run => run.state === 'saved').length, cleanupRequired: runs.filter(run => run.cleanupRequired && ['failed', 'cancelled', 'interrupted', 'export_failed'].includes(run.state)).length } };
+    return { engine: { ready, ...(!ready ? { error: 'Engine is not ready.' } : {}) }, config: { maxConcurrency: config.maxConcurrency }, coordinator: runtime.stats ? await runtime.stats() : undefined, stats: { total: runs.length, active: runs.filter(run => activeStates.has(run.state)).length, saved: runs.filter(run => run.state === 'saved').length, cleanupRequired: runs.filter(run => run.cleanupRequired && ['failed', 'cancelled', 'interrupted', 'export_failed'].includes(run.state)).length } };
   });
   app.get('/api/automations', async () => runtime.listAutomations());
   app.get('/api/runs', async () => runtime.list());
-  app.post<{ Body: { automationId: string; inputs: Record<string, unknown>; preset?: PacePreset } }>('/api/runs', {
-    schema: { body: { type: 'object', required: ['automationId', 'inputs'], additionalProperties: false, properties: { automationId: { type: 'string', minLength: 1, maxLength: 80 }, inputs: { type: 'object' }, preset: paceSchema } } },
+  app.post<{ Body: { automationId: string; inputs: Record<string, unknown>; preset?: PacePreset; identityId?: string } }>('/api/runs', {
+    schema: { body: { type: 'object', required: ['automationId', 'inputs'], additionalProperties: false, properties: { automationId: { type: 'string', minLength: 1, maxLength: 80 }, inputs: { type: 'object' }, preset: paceSchema, identityId: { type: 'string', pattern: '^[a-f0-9-]{36}$' } } } },
   }, async (request, reply) => { try { const run = await runtime.submit(request.body); reply.code(202); return run; } catch { throw httpError(400, 'Unknown automation, invalid inputs, or runtime unavailable.'); } });
   const getRun = (id: string) => { try { const run = runtime.get(id); if (run) return run; } catch {} throw httpError(404, 'Run not found.'); };
   app.get<{ Params: { id: string } }>('/api/runs/:id', async request => getRun(request.params.id));
+  app.get<{ Params: { id: string } }>('/api/runs/:id/evidence', async request => { getRun(request.params.id); return runtime.evidence ? runtime.evidence(request.params.id) : []; });
   for (const operation of ['cancel', 'pause', 'resume', 'retry-export', 'finish'] as const) {
     app.post<{ Params: { id: string } }>(`/api/runs/:id/${operation}`, async request => {
       getRun(request.params.id);
@@ -153,18 +161,19 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
   });
   app.get<{ Params: { id: string } }>('/api/runs/:id/view', async request => {
     const run = getRun(request.params.id);
-    if (!config.vncUrl || !activeStates.has(run.state)) return { available: false, reason: !config.vncUrl ? 'Live view is not configured. Use screenshots or the native Kameleo window.' : 'Start this browser to connect to its display.' };
+    if (!config.vncUrl || !canControl(run)) return { available: false, reason: !config.vncUrl ? 'Live control is not configured. Screenshots remain available.' : 'Pause the flow before connecting live controls.' };
     return { available: true, transport: 'vnc', websocketPath: `/api/runs/${run.id}/view/socket`, credentials: config.vncPassword ? { password: config.vncPassword } : undefined };
   });
   app.get<{ Params: { id: string } }>('/api/runs/:id/view/socket', { websocket: true }, (socket, request) => {
     let run;
     try { run = runtime.get(request.params.id); } catch { socket.close(1008, 'Browser is not active'); return; }
-    if (!config.vncUrl || !run || !activeStates.has(run.state)) { socket.close(1008, 'Browser is not active'); return; }
+    if (!config.vncUrl || !canControl(run)) { socket.close(1008, 'Pause the flow before connecting'); return; }
     viewers.set(socket, { id: run.id, session: request.cookies.workbench, bearer: request.headers.authorization });
     const upstream = new WebSocket(config.vncUrl, { handshakeTimeout: 10000, maxPayload: 16 * 1024 * 1024 });
     const pending: Buffer[] = [];
     let queuedBytes = 0;
     socket.on('message', (data, binary) => {
+      if (!canControl(runtime.get(request.params.id))) { socket.close(1008, 'Flow resumed'); return; }
       if (!binary) { socket.close(1003, 'Binary frames required'); return; }
       if (upstream.readyState === WebSocket.OPEN) {
         if (upstream.bufferedAmount > 1024 * 1024) socket.close(1009, 'Display connection is too slow');
@@ -180,7 +189,7 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
     socket.on('error', () => upstream.close());
   });
   const closeInactive = (run: any) => {
-    if (activeStates.has(run.state)) return;
+    if (canControl(run)) return;
     for (const [socket, viewer] of viewers) if (viewer.id === run.id) socket.close(1000, 'Browser is no longer active');
   };
   runtime.on('run', closeInactive);
@@ -195,7 +204,10 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
   app.get('/demo', async (_request, reply) => reply.type('text/html').send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Workbench test form</title><link rel="stylesheet" href="/demo.css"><main><p>KAMELEO WORKBENCH / TEST PAGE</p><h1>A small form, a complete run.</h1><form><label>Display name<input name="displayName" data-test="message" autocomplete="off" required></label><label>Test passphrase<input name="passphrase" type="password" autocomplete="off"></label><button data-test="save">Submit test form</button></form><p id="result" data-test="saved" role="status"></p></main><script src="/demo.js"></script></html>`));
   app.get('/demo.js', async (_request, reply) => reply.type('application/javascript').send(`document.querySelector('form').addEventListener('submit',event=>{event.preventDefault();document.querySelector('#result').textContent=document.querySelector('[data-test=message]').value;document.body.dataset.complete='true';localStorage.setItem('workbench-demo','completed');document.cookie='workbench_demo=completed; Max-Age=86400; SameSite=Lax; path=/';});`));
   app.get('/demo.css', async (_request, reply) => reply.type('text/css').send('body{font:18px system-ui;background:#edf2f6;color:#203647;margin:10vh auto;max-width:640px}main{padding:40px;background:white;border:1px solid #ced8df}label{display:block;margin:24px 0}input{display:block;padding:12px;margin-top:8px;border:1px solid #8496a4;width:90%}button{background:#255f9c;color:white;border:0;padding:14px 22px;cursor:pointer}p{line-height:1.6}'));
-  await app.register(staticFiles, { root: path.join(root, 'public'), prefix: '/', index: 'index.html' });
+  app.get('/', async (_request, reply) => reply.type('text/html').send(assets.html));
+  app.get('/index.html', async (_request, reply) => reply.type('text/html').send(assets.html));
+  await app.register(staticFiles, { root: path.join(config.dataDir, 'assets'), prefix: '/assets/', index: false, setHeaders: response => { response.header('Cache-Control', 'public, max-age=31536000, immutable'); } });
+  await app.register(staticFiles, { root: path.join(root, 'public'), prefix: '/', index: false, decorateReply: false });
   await app.register(staticFiles, { root: path.join(root, 'node_modules', '@novnc', 'novnc'), prefix: '/vendor/novnc/', decorateReply: false, index: false });
   return app;
 }

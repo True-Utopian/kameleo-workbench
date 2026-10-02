@@ -6,7 +6,7 @@ The workbench is a plain HTML, CSS and browser ES-module client in `public/`. Th
 
 Sign in with the workbench access token. The server establishes an HTTP-only session cookie. The Kameleo PAT belongs in server configuration, not this sign-in form.
 
-The left pane lists runs and verified archives. Search matches automation titles and run identifiers. Status filters narrow the list to active runs, input requests, saved runs or failures. Selecting a run shows its browser view, activity, state and export metadata. The System panel reports engine availability and lets the operator check configured proxy inventory.
+The left pane lists runs and verified archives. Search matches titles and run identifiers. Status filters narrow the list to active runs, input requests, saved runs or failures. Selecting a run shows its browser view, activity, state and export metadata. The System panel reports Engine availability and lets the operator check configured proxy inventory. Managed deployments list installed JSON flow packs through the same interface used for scripts.
 
 New run selects an installed automation and an interaction pace (`fast`, `natural`, or `natural-fast`). Its JSON Schema generates fields for strings, secrets, numbers, booleans, enums and nested JSON. The JSON editor also accepts object inputs that are not representable by those fields. The server remains authoritative for schema validation. Credentials are kept in form memory and cleared when the dialog closes; they are never saved to browser storage. Starting another run with the same script does not copy prior inputs.
 
@@ -20,7 +20,7 @@ Snapshots are labelled still images and refresh approximately every five seconds
 
 Connect live requests an authenticated view descriptor and imports noVNC from `/vendor/novnc/core/rfb.js`. Only a same-origin gateway WebSocket path is accepted. Any VNC password supplied by the authenticated endpoint is passed to noVNC in memory and is not stored. The client does not connect directly to a raw VNC or Kameleo endpoint.
 
-During running automation, live view is read-only in the client to prevent accidental competing input. Keyboard and mouse input are enabled when the run is paused, awaiting input, or waiting for operator completion. This is an operator UX guard, not a security boundary: the administrator’s server session authorizes access to the whole worker display. Tenant isolation or separate viewer/controller authorization requires server support.
+The server permits noVNC connections only when the run is paused, awaiting input or waiting for operator completion. Pause an active flow before connecting. Resume closes the control connection; snapshots remain available while automation runs. The administrator still receives the whole worker display, so separate tenants require separate display boundaries.
 
 Fullscreen expands the selected browser stage. Resizing the viewer scales the display locally and does not change the browser screen resolution. If live-view setup is missing or unavailable, the workbench reports the error and retains snapshot access.
 
@@ -39,4 +39,4 @@ The frontend inserts runtime-provided text using text nodes, not HTML. It does n
 
 ## Visual direction
 
-The workbench uses an operational list-and-detail layout with the browser as its central visual. Slate canvas (`#edf2f6`), blue actions (`#255f9c`), dark ink (`#203647`), teal success (`#237969`) and white surfaces keep status readable. Orange is reserved for warnings or attention. Segoe UI and native system fallbacks match a desktop workbench. Borders separate responsibilities; metrics do not occupy promotional cards.
+The workbench uses a list-and-detail layout with a central browser view. Colors are slate (`#edf2f6`), blue (`#255f9c`), dark ink (`#203647`), teal success (`#237969`) and white surfaces. Orange marks warnings. Typography uses Segoe UI and system fallbacks.
