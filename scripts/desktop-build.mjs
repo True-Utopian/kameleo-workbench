@@ -25,7 +25,7 @@ for (const entry of product === 'browser' ? ['packages/vesper-browser', 'docs', 
 const dependencies = product === 'browser' ? {} : { ...rootPackage.dependencies };
 delete dependencies['@kameleo/local-api-client'];
 dependencies['@true-utopian/vesper-browser'] = 'file:packages/vesper-browser';
-const payloadPackage = { name: '@true-utopian/vesper-workbench', version: rootPackage.version, type: 'module', private: true, author: 'true-utopian', license: 'MIT', exports: rootPackage.exports, dependencies };
+const payloadPackage = { name: `@true-utopian/vesper-${product}`, version: metadata.version, type: 'module', private: true, author: 'true-utopian', license: 'MIT', ...(product === 'workbench' ? { exports: rootPackage.exports } : {}), dependencies };
 await writeFile(join(payload, 'package.json'), JSON.stringify(payloadPackage, null, 2));
 await new Promise((done, reject) => {
   const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: payload, stdio: 'inherit', shell: process.platform === 'win32', windowsHide: true });
@@ -52,7 +52,8 @@ await mkdir(join(stage, 'desktop'), { recursive: true });
 for (const file of ['main.cjs', 'service.mjs','service-process.cjs','preload.cjs','update-contract.cjs','seed-files.mjs','plugin-contract.cjs','workbench-host.cjs']) await cp(join(root, 'desktop', file), join(stage, 'desktop', file));
 await writeFile(join(stage,'desktop/update-public-key.pem'),(await updateKey()).publicKey);
 await writeFile(join(stage, 'desktop/product.json'), JSON.stringify({ product, name, version: metadata.version, bundledBrowser: full }));
-const svg = await readFile(join(root, 'public/vesper-mark.svg'), 'utf8');
+const icon = (await readFile(join(root, 'public/vesper-icon.png'))).toString('base64');
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><image width="256" height="256" href="data:image/png;base64,${icon}"/></svg>`;
 const png = new Resvg(svg, { fitTo: { mode: 'width', value: 256 } }).render().asPng();
 await writeFile(join(stage, 'desktop/icon.png'), png);
 const header = Buffer.alloc(22); header.writeUInt16LE(1, 2); header.writeUInt16LE(1, 4); header[8] = 0; header.writeUInt16LE(1, 10); header.writeUInt16LE(32, 12); header.writeUInt32LE(png.length, 14); header.writeUInt32LE(22, 18);

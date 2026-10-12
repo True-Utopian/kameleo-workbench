@@ -1,16 +1,16 @@
 {
   "name": "@true-utopian/vesper-workbench",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Vesper Workbench by true-utopian: local browser automation, durable pipelines and verified profile exports.",
   "type": "module",
   "private": true,
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/True-Utopian/kameleo-workbench.git"
+    "url": "https://github.com/True-Utopian/vesper-workbench.git"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -32,7 +32,7 @@
     "start": "node --env-file-if-exists=.env dist/cli.js serve",
     "dev": "npm run build --workspace @true-utopian/vesper-browser && tsx --env-file-if-exists=.env src/cli.ts serve",
     "typecheck": "npm run build --workspace @true-utopian/vesper-browser && tsc -p tsconfig.json --noEmit",
-    "test": "npm run build --workspace @true-utopian/vesper-browser && npm test --workspace @true-utopian/vesper-browser && tsx --test test/*.test.ts",
+    "test": "npm run build --workspace @true-utopian/vesper-browser && npm test --workspace @true-utopian/vesper-browser && tsx --test --test-concurrency=2 test/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "smoke": "node --env-file-if-exists=.env scripts/smoke.mjs",
     "smoke:proxy": "node --env-file-if-exists=.env scripts/proxy-smoke.mjs",
@@ -62,7 +62,7 @@
     "@fastify/websocket": "^11.3.1",
     "@novnc/novnc": "^1.7.0",
     "@puppeteer/browsers": "3.2.3",
-    "@true-utopian/vesper-browser": "0.4.2",
+    "@true-utopian/vesper-browser": "0.4.3",
     "ajv": "^8.17.1",
     "cron-parser": "5.10.2",
     "fastify": "5.12.5",
