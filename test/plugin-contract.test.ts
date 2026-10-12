@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -57,11 +57,13 @@ test('signed local Workbench add-on verifies, installs and reloads its registry'
     assert.equal(await readInstalled(base), undefined);
     const installed = await installPlugin(verified, base, tar);
     assert.equal(installed.enabled, true); assert.equal(installed.version, '0.3.1');
-    assert.deepEqual(await readInstalled(base), installed);
+    // Windows may expose TEMP through an 8.3 alias; the registry reader
+    // canonicalizes the physical directory before validating containment.
+    assert.deepEqual(await readInstalled(base), { ...installed, directory: await realpath(installed.directory) });
     for (const file of required) assert.equal(await readFile(join(installed.directory, file), 'utf8'), 'fixture');
     const second = await installPlugin(verified, base, tar);
     assert.notEqual(second.directory, installed.directory, 'A replacement must not overwrite the previous installation');
-    assert.equal((await readInstalled(base)).directory, second.directory);
+    assert.equal((await readInstalled(base)).directory, await realpath(second.directory));
     assert.equal(await readFile(join(installed.directory, 'runtime/service.mjs'), 'utf8'), 'fixture');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -173,7 +175,7 @@ test('source archive replaced after preflight cannot change the private installa
     const replacement = await installPlugin(verified, base, mutatingTar);
     assert.notEqual(extractedFile, fixture.archiveFile, 'Extraction must use the verified private snapshot');
     assert.notEqual(replacement.directory, installed.directory);
-    assert.deepEqual(await readInstalled(base), replacement);
+    assert.deepEqual(await readInstalled(base), { ...replacement, directory: await realpath(replacement.directory) });
     for (const file of required) assert.equal(await readFile(join(replacement.directory, file), 'utf8'), 'fixture');
     await assert.rejects(verifyPlugin(fixture.file, publicKey, current), /contents.*signed manifest/);
   } finally { await rm(directory, { recursive: true, force: true }); }
