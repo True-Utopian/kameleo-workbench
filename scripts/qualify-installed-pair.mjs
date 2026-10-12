@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -36,6 +36,10 @@ await new Promise(done => fixture.listen(0, '127.0.0.1', done));
 const fixtureUrl = `http://127.0.0.1:${fixture.address().port}`;
 let runId, connection, finished = false, temporary, scheduleId, importedId, client;
 const extended = process.argv.includes('--extended');
+const catalogRemoval = process.argv.includes('--catalog-removal');
+if(catalogRemoval && !extended)throw new Error('Catalog removal qualification requires --extended');
+const catalogBaseline = catalogRemoval ? await browser.api('/api/v1/extensions') : undefined;
+let ownedExtension;
 async function waitRun(id, states) {
   const deadline = Date.now() + 90000;
   while (Date.now() < deadline) {
@@ -52,8 +56,10 @@ try {
   const extraInputs = {};
   if (extended) {
     temporary = await mkdtemp(join(tmpdir(), 'vesper-installed-proof-'));
-    const file = join(temporary, 'original-fixture.zip'); await writeFile(file, extensionZip());
-    const extension = await client.importExtension(file); extraInputs.extensions = [extension.id];
+    const file = join(temporary, 'original-fixture.zip');
+    const nonce=randomBytes(6),version=catalogRemoval?'3.'+[0,2,4].map(offset=>nonce.readUInt16LE(offset)).join('.'):'1.0.0';
+    await writeFile(file, extensionZip(version));
+    const extension = await client.importExtension(file); ownedExtension=extension; extraInputs.extensions = [extension.id];
     const calendar = new VesperWorkbenchClient({ url: workbench.url, token: (await readFile(join(directory, 'workbench', 'admin-token'), 'utf8')).trim() });
     const preview = await calendar.calendarPreview('0 9 * * *', 'Europe/London', Date.parse('2026-03-28T00:00:00Z'));
     assert.equal(preview.occurrences.length, 5); assert.equal(preview.occurrences[1], Date.parse('2026-03-29T08:00:00Z'));
@@ -100,6 +106,22 @@ try {
     assert.equal(report.importedExtension.visits, 2); assert.equal(report.importedExtension.content.cpu, 4);
     await connection.disconnect(); connection = undefined; await client.stop(importedId); await client.releaseProfile(importedId);
     report.checks.push('Installed Browser imports the saved extension archive into a new profile and retains its browser identity and storage');
+    if(catalogRemoval){
+      await assert.rejects(client.removeExtension(ownedExtension.id),error=>error.status===409);
+      await client.update(saved.profileId,{extensions:[]});await client.update(importedId,{extensions:[]});
+      assert.deepEqual(await client.removeExtension(ownedExtension.id),{id:ownedExtension.id,removed:true});
+      assert.ok(!(await client.extensions()).some(extension=>extension.id===ownedExtension.id));
+      await client.update(importedId,{extensions:[ownedExtension.id]});await client.start(importedId);
+      connection=await puppeteer.connect({browserWSEndpoint:await client.connectionUrl(importedId),defaultViewport:null});
+      const restoredPage=await connection.newPage();await restoredPage.goto(fixtureUrl);
+      await restoredPage.waitForFunction(()=>document.documentElement.dataset.vesperExtension,{timeout:20000});
+      const retained=await restoredPage.evaluate(()=>JSON.parse(document.documentElement.dataset.vesperExtension));assert.equal(retained.visits,3);
+      await connection.disconnect();connection=undefined;await client.stop(importedId);await client.update(importedId,{extensions:[]});
+      const restored=await client.importExtension(join(temporary,'original-fixture.zip'));assert.equal(restored.id,ownedExtension.id);await client.removeExtension(restored.id);
+      assert.deepEqual(await client.extensions(),catalogBaseline);
+      report.catalogRemoval={assignedRefusal:true,removed:true,retainedStorageVisits:retained.visits,reimportIdentity:true,existingCatalogUntouched:true};
+      report.checks.push('Installed catalog removal refuses assigned packages; retained profile copies and storage survive removal, and re-import preserves identity');
+    }
     importedId = undefined;
   }
   const after = await browser.api('/api/v1/profiles');
