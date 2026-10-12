@@ -1,4 +1,4 @@
-import { defineAutomation } from '../dist/index.js';
+const { defineAutomation } = await import(process.env.VESPER_SDK_MODULE ?? '../dist/index.js');
 
 export default defineAutomation({
   id: 'demo',

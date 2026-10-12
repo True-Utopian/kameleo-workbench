@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rename, stat, open } from "node:fs/promises";
 import { join, posix, resolve, win32 } from "node:path";
 import { performance } from "node:perf_hooks";
+import type { NodeDatabase } from '../coordinator/local-database.js';
 import { setTimeout as delay } from "node:timers/promises";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -26,7 +27,7 @@ import type {
   FlowSnapshot,
   IdentityResolver,
 } from "../flows/types.js";
-import { KameleoEngine, type EngineAdapter } from "../engine.js";
+import { KameleoEngine, browserEndpoint, type EngineAdapter } from "../engine.js";
 import {
   RuntimeError,
   type RunRecord,
@@ -66,7 +67,7 @@ export interface ManagedOptions {
   fixtureOrigin?: string;
   proxies?: RuntimeProxies;
   engine?: EngineAdapter;
-  database?: PgDatabase;
+  database?: NodeDatabase;
 }
 interface Session {
   grant: LeaseGrant;
@@ -96,7 +97,7 @@ const validator = new Ajv2020({ strict: false, allErrors: false });
 
 export class ManagedRuntime extends EventEmitter {
   readonly coordinator: DurableCoordinator;
-  private db: PgDatabase;
+  private db: NodeDatabase;
   private engine: EngineAdapter;
   private vault: InputVault;
   private packs = new Map<string, CompiledFlow>();
@@ -158,12 +159,14 @@ export class ManagedRuntime extends EventEmitter {
     }
     if (!Number.isSafeInteger(this.agentSequence) || this.agentSequence < 0)
       throw new Error("Invalid node journal sequence");
-    for (const name of await readdir(this.options.flowsDir)) {
-      if (!name.endsWith(".flow.json")) continue;
-      const pack = JSON.parse(
+    const names = (await readdir(this.options.flowsDir)).sort((a,b) => Number(a.endsWith('.vflow.json')) - Number(b.endsWith('.vflow.json')));
+    for (const name of names) {
+      if (!name.endsWith(".flow.json") && !name.endsWith('.vflow.json')) continue;
+      const bundle = name.endsWith('.vflow.json') ? JSON.parse(await readFile(join(this.options.flowsDir,name),'utf8')) as { pack: FlowPack; manifest: FlowManifest } : undefined;
+      const pack = bundle?.pack ?? JSON.parse(
         await readFile(join(this.options.flowsDir, name), "utf8"),
       ) as FlowPack;
-      const manifest = JSON.parse(
+      const manifest = bundle?.manifest ?? JSON.parse(
         await readFile(
           join(
             this.options.flowsDir,
@@ -172,15 +175,16 @@ export class ManagedRuntime extends EventEmitter {
           "utf8",
         ),
       ) as FlowManifest;
-      if (this.options.fixtureOrigin && pack.id === "owned-account-signin")
-        manifest.origins.owned = this.options.fixtureOrigin;
+      if (this.options.fixtureOrigin && ['owned-fixture-profile','owned-fixture-brave'].includes(pack.execution.profilePolicyId))
+        manifest.origins[pack.start.originRef] = this.options.fixtureOrigin;
+      if (!this.options.fixtureOrigin && ['owned-fixture-profile','owned-fixture-brave'].includes(pack.execution.profilePolicyId) && this.options.database) continue;
       const compiled = compileFlow(pack, manifest);
       if (
         !this.options.policies.profiles[pack.execution.profilePolicyId] ||
         !this.options.policies.proxies[pack.execution.proxyPolicyId]
       )
         throw new Error(`Missing execution policy for ${pack.id}`);
-      if (this.packs.has(pack.id))
+      if (this.packs.has(pack.id) && !bundle)
         throw new Error(`Duplicate flow ID ${pack.id}`);
       this.packs.set(pack.id, compiled);
       await durableWrite(
@@ -201,7 +205,7 @@ export class ManagedRuntime extends EventEmitter {
         nodeMaxBrowsers: this.options.maxConcurrency,
       });
     }
-    if (!this.packs.size) throw new Error("No .flow.json packs found");
+    if (!this.packs.size && !this.options.database) throw new Error("No .flow.json packs found");
     await this.recover();
     await this.refresh();
     this.timer = setInterval(() => {
@@ -216,6 +220,20 @@ export class ManagedRuntime extends EventEmitter {
       description: `Flow ${pack.version}`,
       inputSchema: pack.inputSchema,
     }));
+  }
+  flowDefinitions() { return [...this.packs.values()].map(({ pack, manifest, hash }) => ({ pack: structuredClone(pack), manifest: structuredClone(manifest), hash })); }
+  async installFlow(pack: FlowPack, manifest: FlowManifest) {
+    if (!/^[a-z][a-z0-9-]{1,63}$/.test(pack.id)) throw new RuntimeError('Invalid flow ID',400);
+    if (this.closed) throw new RuntimeError('Runtime is closing');
+    if (this.options.fixtureOrigin && ['owned-fixture-profile','owned-fixture-brave'].includes(pack.execution.profilePolicyId)) manifest = { ...manifest, origins: { ...manifest.origins, [pack.start.originRef]: this.options.fixtureOrigin } };
+    const compiled = compileFlow(pack,manifest);
+    if (!this.options.policies.profiles[pack.execution.profilePolicyId] || !this.options.policies.proxies[pack.execution.proxyPolicyId]) throw new RuntimeError('Select an installed profile and proxy policy',400);
+    await this.coordinator.ensureWorkspace({ tenantId: this.options.tenantId, siteId: stableId(`site:${this.options.tenantId}:${manifest.origins[pack.start.originRef]!}`), origin: manifest.origins[pack.start.originRef]!, quotaDomainId: this.quotaId, vendorTeamKey: this.options.teamKey, totalBrowserBudget: this.options.browserBudget, nodeId: this.options.nodeId, nodeIncarnationId: this.incarnation, engineProcessKey: this.incarnation, nodeMaxBrowsers: this.options.maxConcurrency });
+    await durableWrite(join(this.options.dataDir,'packs',`${compiled.hash}.json`),JSON.stringify({ pack, manifest }));
+    // One atomic bundle prevents mixed pack/manifest versions on restart. Old runs
+    // retain their immutable content-addressed snapshot in the run journal.
+    await durableWrite(join(this.options.flowsDir,`${pack.id}.vflow.json`),JSON.stringify({ pack, manifest }));
+    this.packs.set(pack.id,compiled); return { id: pack.id, hash: compiled.hash };
   }
   list() {
     return [...this.records.values()]
@@ -647,6 +665,7 @@ export class ManagedRuntime extends EventEmitter {
         }
       }
       const profile = session.grant.kameleoProfileId!;
+      await this.engine.claimProfile?.(profile, id);
       await this.guard(id);
       await this.operation(
         session,
@@ -661,11 +680,7 @@ export class ManagedRuntime extends EventEmitter {
         () => this.engine.start(profile),
         60_000,
       );
-      const endpoint = new URL(this.options.engineUrl);
-      endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
-      endpoint.pathname = `/puppeteer/${profile}`;
-      endpoint.search = "";
-      endpoint.hash = "";
+      const endpoint = await browserEndpoint(this.engine, this.options.engineUrl, profile);
       await this.guard(id);
       session.browser = (
         await this.operation(
@@ -673,7 +688,7 @@ export class ManagedRuntime extends EventEmitter {
           "attach",
           () =>
             puppeteer.connect({
-              browserWSEndpoint: endpoint.href,
+              browserWSEndpoint: endpoint,
               defaultViewport: null,
               protocolTimeout: 15_000,
             }),
@@ -982,8 +997,9 @@ export class ManagedRuntime extends EventEmitter {
   private async save(id: string, session: Session) {
     await this.status(id, "saving");
     await this.stop(session);
-    const temporary = `${id}-${randomUUID()}.partial.kameleo`,
-      name = `${id}-${randomUUID()}.kameleo`;
+    const extension = this.engine.archiveExtension ?? '.kameleo';
+    const temporary = `${id}-${randomUUID()}.partial${extension}`,
+      name = `${id}-${randomUUID()}${extension}`;
     const localTemporary = join(this.options.localExportDir, temporary),
       localFinal = resolve(this.options.localExportDir, name);
     const engineJoin = /^[A-Za-z]:[\\/]/.test(this.options.engineExportDir)
@@ -1039,6 +1055,7 @@ export class ManagedRuntime extends EventEmitter {
         artifact: { name, path: localFinal, bytes: info.size, sha256 },
       });
       await this.coordinator.release(session.grant, { disposition: "saved" });
+      await this.engine.releaseProfile?.(session.grant.kameleoProfileId!);
       await this.status(id, "saved");
     } catch {
       await this.status(id, "export_failed", "export_unverified");
@@ -1311,6 +1328,7 @@ export class ManagedRuntime extends EventEmitter {
             lease.kameleoProfileId = found.id;
           }
         }
+        if (lease.kameleoProfileId) await this.engine.claimProfile?.(lease.kameleoProfileId, lease.flowId);
         await this.stop(session);
         const flow = await this.coordinator.getFlow(
           this.options.tenantId,

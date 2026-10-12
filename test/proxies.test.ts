@@ -192,14 +192,15 @@ test('minimum remaining lifetime rejects unknown expiry and custom probe deadlin
   await assert.rejects(hung.allocate({ provider: 'direct', proxy: connection, probeTimeoutMs: 20, timeoutMs: 1000 }, 'run'), /PROBE_TIMEOUT/);
 });
 
-test('health probe releases the lease, but expiry never releases an active run implicitly', async () => {
+test('health probe releases the lease, but expiry never releases an active run implicitly', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
   const data = await inventory([{ id: 'one', ...connection, expiresAt: new Date(Date.now() + 300).toISOString() }]);
   try {
     const manager = new ProxyManager({ inventoryFile: data.file, probe: async () => observed() });
     await manager.probeInventory('one');
     assert.equal((await manager.publicInventory())[0]?.leased, false);
     const lease = await manager.allocate({ provider: 'inventory' }, 'run');
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    t.mock.timers.tick(350);
     assert.equal((await manager.publicInventory())[0]?.leased, true);
     manager.release(lease.id);
     await assert.rejects(manager.allocate({ provider: 'inventory' }, 'expired'), /EXPIRED_OR_TOO_SHORT/);

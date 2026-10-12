@@ -1,8 +1,30 @@
-# Kameleo Workbench
+# Vesper
 
-Run headed Kameleo browsers from a web form or HTTP client. The workbench validates inputs, allocates a profile and optional proxy, runs the automation, and saves a verified `.kameleo` archive. Authenticated snapshots show active work; noVNC control is available during an acknowledged pause or input/completion wait.
+![Vesper Browser and Workbench by true-utopian](docs/assets/vesper-banner.svg)
 
-Choose one runtime per deployment. **Script mode** loads trusted JavaScript modules and exposes Puppeteer directly. **Managed mode** loads declarative JSON flow packs and uses PostgreSQL for flow checkpoints, identity/profile ownership, fenced leases and archive metadata. Set `DATABASE_URL` to enable managed mode; leave it unset for scripts.
+**Vesper Browser** keeps independent browser profiles on your PC. **Vesper Workbench** adds repeatable automation, visual flows, schedules and verified profile archives. Install Workbench as an optional plug-in inside Browser, or use its standalone app. Both are original open-source projects by **true-utopian**.
+
+[Get started](#start-locally) · [Desktop setup](docs/desktop.md) · [API reference](docs/api.md) · [Workbench plug-in](docs/workbench-addon.md)
+
+## Status
+
+[![browser](docs/assets/badge-browser.svg)](docs/status.md) [![workbench](docs/assets/badge-workbench.svg)](docs/status.md)
+
+[![Vesper progress map](docs/assets/status.svg)](docs/status.md)
+
+<sub>* Percentages count desktop-verified checks in the [documented inventory](docs/status.md), which grows as requirements become known. Green means accepted; grey means acceptance is pending. Grid squares visualize these proportions, not extra checks. Source-tested, active and planned work are distinguished in the linked checklist. These are not percentages of vendor parity, engineering effort or detection resistance.</sub>
+
+The desktop Browser/Workbench pair runs real Chromium and shares one Browser-owned profile store through an authenticated API. The extension catalog, portable extension profiles, timezone-aware calendar schedules and native-kernel host integration are implemented. The original Chromium kernel is compiling; it has not passed native qualification or activation. WebGL/WebGPU, audio, fonts, media-device modeling, coherent persona generation, Firefox/mobile engines and native Linux qualification remain unfinished.
+
+See the [completion checklist](docs/research/completion-gates.md), [research ledger](docs/research/feature-ledger.md) and [measured validation](docs/validation.md). Windows installers, offline signed updates and a signed Workbench plug-in are built locally. Linux packages are cross-built and require real Linux runtime testing.
+
+## Two tools, one workspace
+
+Browser provides persistent profiles, HTTP/SOCKS5 proxy credentials, folders, favorites, tags, notes, templates, reversible trash, cookie tools and independent archives. Workbench runs trusted scripts or managed flows, keeps durable run state and saves a checksum-verified profile after completion. Local Chromium is the default and requires no vendor account or subscription; proxies are optional for local fixtures. An optional licensed Kameleo compatibility adapter remains available.
+
+Both projects expose versioned `/api/v1` APIs, OpenAPI descriptions and TypeScript/Python clients. Supported policies and their limits are documented in the [native-engine guide](docs/native-engine.md) and [local-browser guide](docs/local-browser.md). Native Brave protection belongs to upstream Brave. Vesper does not claim proprietary masking internals, detection bypass or complete competitor parity.
+
+The desktop Workbench includes both execution modes. **Script mode** loads trusted JavaScript modules and exposes Puppeteer directly. **Managed mode** loads declarative JSON flow packs and persists checkpoints, identity/profile ownership, fenced leases and archive metadata. Desktop builds use private persistent embedded PGlite; remote PostgreSQL remains optional. CLI deployments retain script-only defaults, with `DATABASE_URL` for managed PostgreSQL or `VESPER_LOCAL_COORDINATOR=true` for the combined local mode.
 
 ```text
 Web form / HTTP client
@@ -11,7 +33,7 @@ Web form / HTTP client
 Script or JSON flow → profile settings + proxy policy
         │
         ▼
-Headed Kameleo browser ← live display / follow-up inputs
+Headed Chromium / Kameleo browser ← native window / follow-up inputs
         │ explicit completion
         ▼
 Disconnect → stop → export → verify file → SHA-256 → saved
@@ -24,7 +46,8 @@ Disconnect → stop → export → verify file → SHA-256 → saved
 - Main-frame URL/DOM state recognition, explicit refinement, ambiguity handling and fresh evidence before managed browser input.
 - Opaque verification choices, exact fill readback, identity receipt checks and durable action intent. An uncertain submission requires reconciliation instead of automatic replay.
 - `fast`, `natural-fast` and `natural` pacing, plus custom timings. Raw Puppeteer is always available.
-- Per-input profile and proxy hooks; local, persistent Kameleo profiles.
+- Per-input profile and proxy hooks; persistent Chromium or Kameleo profiles.
+- Local profile controls in the dashboard, including proxy editing and archive upload.
 - Imported HTTP/SOCKS5 proxies, IPRoyal sticky residential credentials, and a custom provider interface.
 - Proxy constraints for type, location, ISP/ASN, expiry, latency, freshness and independent verification. Observed exit IPs are reserved across managed nodes sharing a quota; script mode reserves them within one process.
 - Authenticated noVNC viewing for a private Linux Kameleo display; screenshots and the native Kameleo window on Windows.
@@ -34,11 +57,11 @@ The HTTP interface has one administrator token. Managed coordination scopes reco
 
 ## Start locally
 
-Use Node.js 24 or newer and a running Kameleo Engine. A Kameleo account with the necessary automation entitlement is required for real browser runs.
+Use Node.js 24 or newer. Install free Chromium once, then start the local workbench:
 
 ```sh
 npm ci
-npm run build
+npm run browser:install
 npm start
 ```
 
@@ -50,7 +73,27 @@ npm run token --silent
 
 Open **http://127.0.0.1:3180**, enter that access token, and choose **Fill and verify a form**. Use `http://127.0.0.1:3180/demo` as the fixture URL. The demo sends nothing to an outside service.
 
-Copy `.env.example` to `.env` to change settings. The same Node commands work in PowerShell and Linux shells. Native Windows needs Kameleo Desktop/Engine installed separately; the Linux route uses Kameleo's official Docker image.
+Copy `.env.example` to `.env` to change settings. Open **Profiles** to create a browser, add your proxy, and choose **Open browser**. The local backend exports `.workbench.tgz` archives; proxies are optional for local fixtures. An existing Chromium executable can replace the download with `LOCAL_BROWSER_EXECUTABLE`.
+
+### Run both Vesper projects together
+
+Vesper Browser has its own profile manager at **http://127.0.0.1:3181**. From the repository root, build both projects and install Chromium into Browser's private store once:
+
+```sh
+npm run build
+node packages/vesper-browser/dist/cli.js install
+npm run browser:serve
+```
+
+In a second terminal, start Workbench connected to that Browser service:
+
+```sh
+npm run start:connected
+```
+
+Use `npm run browser:token --silent` for Browser and `npm run token --silent` for Workbench. Their tokens are separate. The included `vesper.local.env` contains the loopback address and token-file path; it contains no token value. Both interfaces now show the same Browser-owned profiles. Closing Workbench preserves independently opened Browser windows. Stop Browser before using its offline profile commands. `npm start` still selects the embedded local engine unless you configure the service connection in `.env`.
+
+To keep using the licensed backend, set `BROWSER_BACKEND=kameleo` and start Kameleo Desktop/Engine separately. That backend retains `.kameleo` archives and its existing automation entitlement requirement. Docker Compose explicitly selects Kameleo. The same Node commands work in PowerShell and Linux shells; the new local backend has been browser-tested on this Windows PC.
 
 ## Start with Docker
 
@@ -136,8 +179,9 @@ Managed flows use the guarded interaction executor for typing, pointer movement 
 ```sh
 npm run check
 npm audit
+npm run smoke:pair
 ```
 
 CI runs the offline checks on Windows and Ubuntu. Real Kameleo tests are opt-in because they need your Engine, account and local profile storage. See the validation record before treating any provider or platform as tested.
 
-The project uses Kameleo's [Local API](https://developer.kameleo.io/) and [Puppeteer](https://pptr.dev/). It is independent of Kameleo and proxy providers.
+The project uses [Puppeteer](https://pptr.dev/), free Chromium, and an optional adapter for Kameleo's [Local API](https://developer.kameleo.io/). It is independent of Kameleo and proxy providers.

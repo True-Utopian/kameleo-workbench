@@ -41,6 +41,7 @@ services:
     build: .
     init: true
     environment:
+      BROWSER_BACKEND: kameleo
       KAMELEO_URL: http://kameleo:5050
       KAMELEO_VNC_URL: ws://kameleo/websockify
       VNC_PASSWORD: ${VNC_PASSWORD}

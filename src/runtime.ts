@@ -7,7 +7,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { fork } from 'node:child_process';
 import { Ajv } from 'ajv';
 import puppeteer from 'puppeteer-core';
-import { KameleoEngine, type EngineAdapter } from './engine.js';
+import { KameleoEngine, browserEndpoint, type EngineAdapter } from './engine.js';
 import type { Automation, AutomationDescriptor, InputChallenge, JsonSchema } from './automation.js';
 import { resolvePace, type PacePreset } from './actions.js';
 
@@ -108,6 +108,7 @@ export class Runtime extends EventEmitter {
           record.profileId = found.id;
         }
         if (!record.profileId) throw new Error('Unknown browser state');
+        await this.engine.claimProfile?.(record.profileId, id);
         await this.bounded(this.engine.stop(record.profileId)); await this.releaseLease(id); record.cleanupRequired = false; this.blockedRuns.delete(id);
       } catch { record.error = 'Browser cleanup could not be confirmed after restart. New sessions are held until recovery.'; }
     }
@@ -195,6 +196,7 @@ export class Runtime extends EventEmitter {
       clearTimeout(state.timer); state.input?.reject(new Error('Run ended')); state.resume?.(); state.finish?.();
       if (state.lifecyclePending || (record.cleanupRequired && !state.stopped)) { record.cleanupRequired = true; this.blockedRuns.add(id); }
       if (state.lease && !state.lifecyclePending && (!record.profileId || state.stopped)) { try { await this.releaseLease(id); } catch { this.log(id, 'Proxy lease release could not be confirmed.'); } }
+      if (record.profileId && state.stopped && !state.lifecyclePending && !['saved', 'export_failed'].includes(record.state)) await this.engine.releaseProfile?.(record.profileId).catch(() => { record.cleanupRequired = true; this.blockedRuns.add(id); });
       if (record.profileId) this.profileLocks.delete(record.profileId);
       delete record.challenge; record.pauseRequested = false; record.waitingForFinish = false;
       state.inputs = {}; state.secrets.clear(); this.active.delete(id); await this.changed(id);
@@ -234,7 +236,8 @@ export class Runtime extends EventEmitter {
   private async save(id: string) {
     const record = this.records.get(id)!; if (!record.profileId) throw new Error('No profile to export');
     record.state = 'saving'; delete record.error; await this.changed(id);
-    const name = `${id}.kameleo`; const temporary = `${id}-${randomUUID()}.partial.kameleo`;
+    const extension = this.engine.archiveExtension ?? '.kameleo';
+    const name = `${id}${extension}`; const temporary = `${id}-${randomUUID()}.partial${extension}`;
     const localTemporary = join(this.options.localExportDir, temporary); const localFinal = join(this.options.localExportDir, name);
     const engineJoin = /^[A-Za-z]:[\\/]/.test(this.options.engineExportDir) ? win32.join : posix.join;
     try {
@@ -247,6 +250,7 @@ export class Runtime extends EventEmitter {
       const hash = createHash('sha256'); for await (const chunk of createReadStream(localTemporary)) hash.update(chunk);
       await rename(localTemporary, localFinal);
       record.artifact = { name, path: resolve(localFinal), bytes: info.size, sha256: hash.digest('hex') };
+      await this.engine.releaseProfile?.(record.profileId);
       record.state = 'saved'; record.timings.savedAt = Date.now(); await this.changed(id);
     } catch {
       await rm(localTemporary, { force: true }).catch(() => {});
@@ -315,12 +319,13 @@ export class Runtime extends EventEmitter {
     const record = this.records.get(id); if (!record?.profileId || !['running', 'paused', 'awaiting_input'].includes(record.state)) throw new Error('Browser is not available');
     return this.withProfile(record.profileId, async () => {
       if (!['running', 'paused', 'awaiting_input'].includes(record.state)) throw new Error('Browser is not available');
-      const endpoint = new URL(this.options.engineUrl); endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:'; endpoint.pathname = `/puppeteer/${record.profileId}`;
-      const browser = await puppeteer.connect({ browserWSEndpoint: endpoint.href, defaultViewport: null, protocolTimeout: 15_000 });
+      const endpoint = await browserEndpoint(this.engine, this.options.engineUrl, record.profileId!);
+      const browser = await puppeteer.connect({ browserWSEndpoint: endpoint, defaultViewport: null, protocolTimeout: 15_000 });
       try { const pages = await browser.pages(); if (!pages.length) throw new Error('No page available'); return Buffer.from(await pages[pages.length - 1]!.screenshot({ type: 'jpeg', quality: 75 })); } finally { await browser.disconnect(); }
     });
   }
-  private runChild(context: RunnerContext): Promise<boolean> {
+  private async runChild(context: RunnerContext): Promise<boolean> {
+    const browserWSEndpoint = await browserEndpoint(this.engine, this.options.engineUrl, context.profileId);
     return new Promise((resolveRun, reject) => {
       const worker = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './run-worker.ts' : './run-worker.js', import.meta.url));
       const child = fork(worker, [], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'], serialization: 'advanced' });
@@ -340,7 +345,7 @@ export class Runtime extends EventEmitter {
       });
       const finish = (error?: Error) => { if (settled) return; settled = true; context.signal.removeEventListener('abort', abort); if (error || context.signal.aborted) reject(error ?? new Error('Cancelled')); else resolveRun(save); };
       child.once('error', error => finish(error)); child.once('exit', () => finish());
-      child.send({ type: 'start', automationPath: context.automationPath, engineUrl: this.options.engineUrl, profileId: context.profileId, inputs: context.inputs, preset: context.preset });
+      child.send({ type: 'start', automationPath: context.automationPath, browserWSEndpoint, inputs: context.inputs, preset: context.preset });
       if (context.signal.aborted) abort();
     });
   }

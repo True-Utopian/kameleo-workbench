@@ -1,6 +1,12 @@
-import { KameleoLocalApiClient } from '@kameleo/local-api-client';
+import type { KameleoLocalApiClient } from '@kameleo/local-api-client';
 
 export interface EngineAdapter {
+  readonly kind?: string;
+  readonly archiveExtension?: string;
+  connectionUrl?(profileId: string): Promise<string>;
+  close?(): Promise<void>;
+  claimProfile?(profileId: string, runId: string): Promise<void>;
+  releaseProfile?(profileId: string): Promise<void>;
   ready(): Promise<void>;
   create(settings: Record<string, unknown>): Promise<{ id: string }>;
   install(profileId: string): Promise<void>;
@@ -11,14 +17,17 @@ export interface EngineAdapter {
   versions?(profileId: string): Promise<{ engineVersion: string; kernelVersion: string }>;
 }
 export class KameleoEngine implements EngineAdapter {
-  private client: KameleoLocalApiClient;
-  constructor(readonly url: string) { this.client = new KameleoLocalApiClient({ basePath: url }); }
-  async ready() { await this.client.verifyEngineReady(); }
-  async create(settings: Record<string, unknown>) { return this.client.profile.createProfile(settings); }
-  async install(profileId: string) { await this.client.profile.installProfileKernel(profileId); }
-  async start(profileId: string) { await this.client.profile.startProfile(profileId); }
+  readonly kind = 'kameleo';
+  readonly archiveExtension = '.kameleo';
+  private client?: Promise<KameleoLocalApiClient>;
+  constructor(readonly url: string) {}
+  private getClient() { return this.client ??= import('@kameleo/local-api-client').then(({ KameleoLocalApiClient }) => new KameleoLocalApiClient({ basePath: this.url })); }
+  async ready() { await (await this.getClient()).verifyEngineReady(); }
+  async create(settings: Record<string, unknown>) { return (await this.getClient()).profile.createProfile(settings); }
+  async install(profileId: string) { await (await this.getClient()).profile.installProfileKernel(profileId); }
+  async start(profileId: string) { await (await this.getClient()).profile.startProfile(profileId); }
   async stop(profileId: string) {
-    try { await this.client.profile.stopProfile(profileId); }
+    try { await (await this.getClient()).profile.stopProfile(profileId); }
     catch (error) {
       // The intended stopped state already holds. Other failures must block export.
       if (typeof error === 'object' && error !== null) {
@@ -32,10 +41,19 @@ export class KameleoEngine implements EngineAdapter {
       throw error;
     }
   }
-  async export(profileId: string, path: string) { await this.client.profile.exportProfile(profileId, { path }); }
-  async findByRunId(runId: string) { return (await this.client.profile.listProfiles()).find(profile => profile.name === `run-${runId}`); }
+  async export(profileId: string, path: string) { await (await this.getClient()).profile.exportProfile(profileId, { path }); }
+  async findByRunId(runId: string) { return (await (await this.getClient()).profile.listProfiles()).find(profile => profile.name === `run-${runId}`); }
   async versions(profileId: string) {
-    const [user, profile] = await Promise.all([this.client.general.getUserInfo(), this.client.profile.readProfile(profileId)]);
+    const client = await this.getClient();
+    const [user, profile] = await Promise.all([client.general.getUserInfo(), client.profile.readProfile(profileId)]);
     return { engineVersion: user.version, kernelVersion: profile.fingerprint.browser.version };
   }
+}
+
+export async function browserEndpoint(engine: EngineAdapter, url: string, profileId: string): Promise<string> {
+  if (engine.connectionUrl) return engine.connectionUrl(profileId);
+  const endpoint = new URL(url);
+  endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:';
+  endpoint.pathname = `/puppeteer/${profileId}`; endpoint.search = ''; endpoint.hash = '';
+  return endpoint.href;
 }

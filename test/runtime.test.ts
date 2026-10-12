@@ -29,6 +29,16 @@ async function until(runtime: Runtime, id: string, predicate: (record: RunRecord
   for (let attempt = 0; attempt < 300; attempt++) { const record = runtime.get(id); if (predicate(record)) return record; await delay(10); }
   throw new Error(`Run did not reach expected state: ${runtime.get(id).state}`);
 }
+async function retryAfterCleanup(runtime: Runtime, id: string) {
+  const deadline = Date.now() + 10000;
+  while (true) {
+    try { return await runtime.retryExport(id); }
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== 'Profile is busy' || Date.now() >= deadline) throw error;
+      await delay(10);
+    }
+  }
+}
 test('explicit completion stops before verified atomic export and never persists inputs', async () => {
   const fixture = await setup({ runner: async context => { context.log(`input ${context.inputs.password}`); return true; } });
   try {
@@ -48,7 +58,7 @@ test('failed export retries only export and retains profile', async () => {
     const run = await fixture.runtime.submit({ automationId: 'fixture', inputs: {} });
     await until(fixture.runtime, run.id, r => r.state === 'export_failed');
     await delay(20); fixture.engine.failExport = false;
-    const saved = await fixture.runtime.retryExport(run.id);
+    const saved = await retryAfterCleanup(fixture.runtime, run.id);
     assert.equal(saved.state, 'saved'); assert.equal(scripts, 1); assert.equal(fixture.engine.exports, 2); assert.equal(saved.profileId, 'profile-1');
   } finally { await fixture.cleanup(); }
 });
@@ -70,6 +80,8 @@ test('queue enforces concurrency and cancellation stops active browser without e
     assert.equal(second.state, 'queued'); assert.equal(starts, 1);
     assert.equal((await fixture.runtime.cancel(first.id)).state, 'cancelled');
     await until(fixture.runtime, second.id, r => r.state === 'running');
+    // The durable running state is published before the worker callback is entered.
+    for (let attempt = 0; starts < 2 && attempt < 300; attempt++) await delay(10);
     assert.equal(starts, 2); await fixture.runtime.cancel(second.id); assert.equal(fixture.engine.exports, 0);
   } finally { await fixture.cleanup(); }
 });
@@ -145,25 +157,36 @@ test('late logs after timeout cannot persist inputs after redaction state is rel
   } finally { await fixture.cleanup(); }
 });
 test('cancelled pending creation holds admission until late browser cleanup', async () => {
-  const fixture = await setup({ runTimeoutMs: 100, maxConcurrency: 1 });
-  let creations = 0; fixture.engine.create = async () => { creations++; if (creations === 1) await delay(200); return { id: `pending-${creations}` }; };
+  const fixture = await setup({ maxConcurrency: 1 });
+  let releaseCreate!: () => void, enteredCreate!: () => void;
+  const gate = new Promise<void>(resolve => { releaseCreate = resolve; });
+  const entered = new Promise<void>(resolve => { enteredCreate = resolve; });
+  let creations = 0; fixture.engine.create = async () => { creations++; if (creations === 1) { enteredCreate(); await gate; } return { id: `pending-${creations}` }; };
   try {
     const first = await fixture.runtime.submit({ automationId: 'fixture', inputs: {} });
-    await until(fixture.runtime, first.id, r => r.state === 'failed' && r.cleanupRequired === true);
-    const next = await fixture.runtime.submit({ automationId: 'fixture', inputs: {} }); await delay(30); assert.equal(creations, 1); assert.equal(fixture.runtime.get(next.id).state, 'queued');
+    await entered;
+    const cancelled = await fixture.runtime.cancel(first.id);
+    assert.equal(cancelled.state, 'cancelled'); assert.equal(cancelled.cleanupRequired, true);
+    const next = await fixture.runtime.submit({ automationId: 'fixture', inputs: {} }); assert.equal(creations, 1); assert.equal(fixture.runtime.get(next.id).state, 'queued');
+    releaseCreate();
     await until(fixture.runtime, next.id, r => r.state === 'saved'); assert.ok(fixture.engine.calls.indexOf('stop:pending-1') < fixture.engine.calls.indexOf('start:pending-2'));
-  } finally { await fixture.cleanup(); }
+  } finally { releaseCreate(); await fixture.cleanup(); }
 });
 test('retry cannot bypass quarantine while a timed-out start is still pending', async () => {
-  const fixture = await setup({ runTimeoutMs: 100 });
-  fixture.engine.start = async id => { await delay(200); fixture.engine.calls.push(`start:${id}`); };
+  const fixture = await setup({ runTimeoutMs: 1000 });
+  let releaseStart!: () => void, enteredStart!: () => void;
+  const gate = new Promise<void>(resolve => { releaseStart = resolve; });
+  const entered = new Promise<void>(resolve => { enteredStart = resolve; });
+  fixture.engine.start = async id => { enteredStart(); await gate; fixture.engine.calls.push(`start:${id}`); };
   try {
     const run = await fixture.runtime.submit({ automationId: 'fixture', inputs: {} });
+    await entered;
     await until(fixture.runtime, run.id, r => r.state === 'failed' && r.cleanupRequired === true);
     await assert.rejects(fixture.runtime.retryExport(run.id), /still pending/);
+    releaseStart();
     await until(fixture.runtime, run.id, r => r.cleanupRequired === false);
     assert.equal(fixture.engine.exports, 0);
-  } finally { await fixture.cleanup(); }
+  } finally { releaseStart(); await fixture.cleanup(); }
 });
 test('recovery releases a retained lease even after the active run is removed', async () => {
   const released: string[] = [];
@@ -172,7 +195,7 @@ test('recovery releases a retained lease even after the active run is removed', 
   try {
     const run = await fixture.runtime.submit({ automationId: 'fixture', inputs: {} });
     await until(fixture.runtime, run.id, r => r.state === 'failed' && r.cleanupRequired === true); assert.deepEqual(released, []);
-    fixture.engine.failStop = false; await fixture.runtime.retryExport(run.id); assert.deepEqual(released, ['lease-one']);
+    fixture.engine.failStop = false; await retryAfterCleanup(fixture.runtime, run.id); assert.deepEqual(released, ['lease-one']);
   } finally { fixture.engine.failStop = false; await fixture.cleanup(); }
 });
 test('export timeout frees execution and a late archive is not published', async () => {

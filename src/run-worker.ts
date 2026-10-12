@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { createActions, type PacePreset } from './actions.js';
 import type { Automation, JsonSchema } from './automation.js';
 
-interface Start { type: 'start'; automationPath: string; engineUrl: string; profileId: string; inputs: Record<string, unknown>; preset: PacePreset }
+interface Start { type: 'start'; automationPath: string; browserWSEndpoint: string; inputs: Record<string, unknown>; preset: PacePreset }
 const requests = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 let counter = 0;
 const abort = new AbortController();
@@ -28,9 +28,7 @@ async function run(message: Start) {
   try {
     const loaded = await import(pathToFileURL(message.automationPath).href);
     const automation = (loaded.default ?? loaded.automation) as Automation;
-    const endpoint = new URL(message.engineUrl); endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:';
-    endpoint.pathname = `/puppeteer/${message.profileId}`; endpoint.search = ''; endpoint.hash = '';
-    browser = await puppeteer.connect({ browserWSEndpoint: endpoint.href, defaultViewport: null });
+    browser = await puppeteer.connect({ browserWSEndpoint: message.browserWSEndpoint, defaultViewport: null });
     const pages = await browser.pages(); const page = pages[0] ?? await browser.newPage();
     const checkpoint = async () => { abort.signal.throwIfAborted(); await request('checkpoint'); abort.signal.throwIfAborted(); };
     const done = async (): Promise<never> => { throw new Finished(); };

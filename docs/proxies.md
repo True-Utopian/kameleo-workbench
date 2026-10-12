@@ -16,7 +16,7 @@ try { /* browser work and profile export */ }
 finally { proxies.release(lease.id); }
 ```
 
-No proxy hook means the runtime uses no proxy. The `direct` provider means **a manually supplied proxy connection**, not direct internet traffic:
+No proxy hook means the runtime uses its optional `DEFAULT_PROXY_INVENTORY_IDS` selection, or no proxy when that setting is empty. The `direct` provider means **a manually supplied proxy connection**, not direct internet traffic:
 
 ```ts
 const request = {

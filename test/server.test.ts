@@ -8,14 +8,27 @@ import { createServer } from '../src/server.js';
 import { loadConfig } from '../src/config.js';
 
 class FakeRuntime extends EventEmitter {
+  submissions = 0;
   run = { id: 'one', state: 'running', artifact: undefined as any };
   listAutomations() { return [{ id: 'fixture', title: 'Fixture' }]; }
-  submit() { return this.run; }
+  submit() { this.submissions++; return this.run; }
   list() { return [this.run]; }
   get(id: string) { if (id !== 'one') throw new Error('Missing'); return this.run; }
   cancel() {} pause() {} resume() {} retryExport() {} done() {} provideInput() {}
   async screenshot() { return Buffer.from('test-image'); }
 }
+
+test('calendar preview and creation are authenticated, documented and reject ambiguous recurrence fields',async()=>{
+ const f=await fixture(),headers={authorization:`Bearer ${token}`};
+ try{
+  const payload={cron:'0 9 * * *',timezone:'Europe/London',after:Date.parse('2026-03-28T08:59:00Z')};
+  assert.equal((await f.app.inject({method:'POST',url:'/api/v1/schedules/preview',payload})).statusCode,401);
+  const result=await f.app.inject({method:'POST',url:'/api/v1/schedules/preview',headers,payload});assert.equal(result.statusCode,200);assert.equal(result.json().occurrences[1],Date.parse('2026-03-29T08:00:00Z'));
+  const created=await f.app.inject({method:'POST',url:'/api/v1/schedules',headers,payload:{name:'Calendar API fixture',automationId:'fixture',inputs:{},cron:'0 9 * * 1-5',timezone:'Europe/London'}});assert.equal(created.statusCode,200);assert.equal(created.json().timezone,'Europe/London');
+  assert.equal((await f.app.inject({method:'POST',url:'/api/v1/schedules',headers,payload:{name:'Conflict',automationId:'fixture',inputs:{},cron:'0 9 * * *',intervalMs:60000}})).statusCode,400);
+  const docs=(await f.app.inject({url:'/api/v1/openapi.json',headers})).json();assert.ok(docs.paths['/api/v1/schedules/preview']);
+ }finally{await f.close();}
+});
 const token = 'a-valid-test-access-token-with-enough-entropy';
 async function fixture() {
   const directory = await mkdtemp(path.join(tmpdir(), 'workbench-api-'));
@@ -55,6 +68,18 @@ test('bearer API validates requests and confines profile downloads', async () =>
     assert.equal(download.statusCode, 200); assert.equal(download.body, 'verified-profile');
     f.runtime.run.artifact = { path: path.resolve('package.json') };
     assert.equal((await f.app.inject({ url: '/api/runs/one/artifact', headers })).statusCode, 403);
+  } finally { await f.close(); }
+});
+
+test('versioned Workbench API documents routes and replays run admission without duplication', async () => {
+  const f = await fixture(), headers = { authorization: `Bearer ${token}`, 'idempotency-key': 'owned-admission-key-001' };
+  try {
+    assert.equal((await f.app.inject({ url: '/api/v1/capabilities', headers })).json().apiVersion, '1.0');
+    const spec = (await f.app.inject({ url: '/api/v1/openapi.json', headers })).json();
+    assert.ok(spec.paths['/api/v1/runs']); assert.ok(spec.paths['/api/v1/runs/{id}/cancel']);
+    for (let i = 0; i < 3; i++) assert.equal((await f.app.inject({ method: 'POST', url: '/api/v1/runs', headers, payload: { automationId: 'fixture', inputs: {} } })).statusCode, 202);
+    assert.equal(f.runtime.submissions, 1);
+    assert.equal((await f.app.inject({ method: 'POST', url: '/api/v1/runs', headers, payload: { automationId: 'fixture', inputs: { changed: true } } })).statusCode, 409);
   } finally { await f.close(); }
 });
 
