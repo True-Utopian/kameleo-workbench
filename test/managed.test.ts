@@ -85,6 +85,7 @@ test("asset revisions retain prior content and repair interrupted cache writes",
     await mkdir(source);
     await Promise.all([
       writeFile(join(source, "app.js"), "window.fixture = 1;"),
+      writeFile(join(source, "schema-form.js"), "export const fixture = 1;"),
       writeFile(join(source, "styles.css"), "body{color:navy}"),
       writeFile(
         join(source, "index.html"),

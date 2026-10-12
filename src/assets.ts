@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { durableWrite } from "./managed/storage.js";
 
 export async function prepareAssets(source: string, cache: string) {
-  const [script, style, template] = await Promise.all(
-    ["app.js", "styles.css", "index.html"].map((name) =>
+  const [script, style, template, schemaForm] = await Promise.all(
+    ["app.js", "styles.css", "index.html", "schema-form.js"].map((name) =>
       readFile(join(source, name), "utf8"),
     ),
   );
@@ -13,6 +13,7 @@ export async function prepareAssets(source: string, cache: string) {
     .update(script!)
     .update(style!)
     .update(template!)
+    .update(schemaForm!)
     .digest("hex")
     .slice(0, 16);
   const directory = join(cache, revision);
@@ -20,6 +21,7 @@ export async function prepareAssets(source: string, cache: string) {
   for (const [name, content] of [
     ["app.js", script!],
     ["styles.css", style!],
+    ["schema-form.js", schemaForm!],
   ]) {
     const target = join(directory, name!);
     const existing = await readFile(target, "utf8").catch((error) => {
