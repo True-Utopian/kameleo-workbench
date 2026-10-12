@@ -8,9 +8,11 @@
 
 ## Status
 
-[![Vesper acceptance status](docs/assets/status.svg)](docs/status.md)
+[![browser](docs/assets/badge-browser.svg)](docs/status.md) [![workbench](docs/assets/badge-workbench.svg)](docs/status.md)
 
-Each tile represents a named acceptance check in the [status inventory](docs/status.md). Green means verified in the installed desktop pair; blue means tested in local source; amber means active work; grey means planned. Counts describe this documented inventory, which grows as requirements become known. They are **not** a percentage of vendor feature parity, total engineering effort or detection resistance.
+[![Vesper progress map](docs/assets/status.svg)](docs/status.md)
+
+<sub>* Percentages count desktop-verified checks in the [documented inventory](docs/status.md), which grows as requirements become known. Green means accepted; grey means acceptance is pending. Grid squares visualize these proportions, not extra checks. Source-tested, active and planned work are distinguished in the linked checklist. These are not percentages of vendor parity, engineering effort or detection resistance.</sub>
 
 The desktop Browser/Workbench pair runs real Chromium and shares one Browser-owned profile store through an authenticated API. The extension catalog, portable extension profiles, timezone-aware calendar schedules and native-kernel host integration are implemented. The original Chromium kernel is compiling; it has not passed native qualification or activation. WebGL/WebGPU, audio, fonts, media-device modeling, coherent persona generation, Firefox/mobile engines and native Linux qualification remain unfinished.
 

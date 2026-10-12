@@ -84,6 +84,12 @@
           "name": "Run ownership leases",
           "state": "verified",
           "evidence": "docs/validation.md"
+        },
+        {
+          "id": "browser-detached-service-ownership",
+          "name": "Detached service ownership",
+          "state": "verified",
+          "evidence": "docs/validation.md"
         }
       ]
     },
@@ -250,8 +256,8 @@
         {
           "id": "browser-bounded-mv3-zip-import",
           "name": "Bounded MV3 ZIP import",
-          "state": "source_tested",
-          "evidence": "docs/extensions.md"
+          "state": "verified",
+          "evidence": "docs/validation.md"
         },
         {
           "id": "browser-permissions-and-versions",
@@ -262,8 +268,8 @@
         {
           "id": "browser-per-profile-assignment",
           "name": "Per-profile assignment",
-          "state": "source_tested",
-          "evidence": "docs/extensions.md"
+          "state": "verified",
+          "evidence": "docs/validation.md"
         },
         {
           "id": "browser-immutable-package-checks",
@@ -274,14 +280,14 @@
         {
           "id": "browser-restart-storage-persistence",
           "name": "Restart storage persistence",
-          "state": "source_tested",
-          "evidence": "docs/extensions.md"
+          "state": "verified",
+          "evidence": "docs/validation.md"
         },
         {
           "id": "browser-portable-extension-archive",
           "name": "Portable extension archive",
-          "state": "source_tested",
-          "evidence": "docs/extensions.md"
+          "state": "verified",
+          "evidence": "docs/validation.md"
         },
         {
           "id": "browser-catalog-removal",
@@ -294,6 +300,12 @@
           "name": "Version storage migration",
           "state": "planned",
           "evidence": "docs/extensions.md"
+        },
+        {
+          "id": "browser-long-windows-launch-paths",
+          "name": "Long Windows launch paths",
+          "state": "verified",
+          "evidence": "docs/validation.md"
         }
       ]
     },
@@ -544,14 +556,14 @@
         {
           "id": "workbench-calendar-cron-rules",
           "name": "Calendar cron rules",
-          "state": "in_progress",
-          "evidence": "docs/research/completion-gates.md"
+          "state": "verified",
+          "evidence": "docs/validation.md"
         },
         {
           "id": "workbench-iana-timezone-dst-rules",
           "name": "IANA timezone/DST rules",
-          "state": "in_progress",
-          "evidence": "docs/research/completion-gates.md"
+          "state": "verified",
+          "evidence": "docs/validation.md"
         },
         {
           "id": "workbench-wake-a-sleeping-pc",
@@ -598,8 +610,8 @@
         {
           "id": "workbench-extension-enabled-automation",
           "name": "Extension-enabled automation",
-          "state": "source_tested",
-          "evidence": "docs/extensions.md"
+          "state": "verified",
+          "evidence": "docs/validation.md"
         },
         {
           "id": "workbench-selenium-qualification",
@@ -640,8 +652,8 @@
         {
           "id": "workbench-new-desktop-feature-release",
           "name": "New desktop feature release",
-          "state": "in_progress",
-          "evidence": "docs/research/completion-gates.md"
+          "state": "verified",
+          "evidence": "docs/validation.md"
         },
         {
           "id": "workbench-full-rollback-cycle-test",

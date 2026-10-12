@@ -4,7 +4,7 @@ By **true-utopian**. Updated 12 October 2026. Applications and private data rema
 
 Vesper is an incomplete product, not yet a qualified replacement for Kameleo, Multilogin or Dolphin Anty. Passing a feature test does not complete the product. There is no defensible overall completion percentage while the vendor research and requirements remain incomplete.
 
-The packaged pair is Browser **0.4.2** with Workbench **0.5.4** as an enabled native add-on. It launches real Chromium, shares a Browser-owned profile store, and has passed extension-enabled automation, calendar scheduling, shutdown and verified export/import. Installation over the earlier desktop pair is undergoing a full private-data backup and checksum check. The custom kernel remains a separate compilation and qualification gate.
+The actual installed pair is Browser **0.4.2** with Workbench **0.5.4** as an enabled native add-on. It launches real Chromium, shares a Browser-owned profile store, and has passed extension-enabled automation, calendar scheduling, shutdown and verified export/import. The upgrade verified a complete backup and preserved every original private file except the intended add-on registry update. TypeScript and Python calendar clients passed against the installed loopback services. The custom kernel remains a separate compilation and qualification gate.
 
 | Area | Current evidence | Required before this area is complete |
 | --- | --- | --- |

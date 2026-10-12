@@ -4,6 +4,8 @@ Updated 2026-10-12.
 
 Named acceptance checks for the current local Vesper roadmap. Counts are not a percentage of vendor features, total engineering effort or detection resistance.
 
+Green in the README treemap means desktop verified. Grey means acceptance is pending; source-tested, in-progress and planned states remain separate below. Treemap squares are visual texture proportional to these named checks, not extra checks.
+
 ## Browser: Profiles
 
 | Acceptance check | State | Evidence |
@@ -20,6 +22,7 @@ Named acceptance checks for the current local Vesper roadmap. Counts are not a p
 | Trash and restore | verified | [Evidence](../docs/validation.md) |
 | Revision conflicts | verified | [Evidence](../docs/validation.md) |
 | Run ownership leases | verified | [Evidence](../docs/validation.md) |
+| Detached service ownership | verified | [Evidence](../docs/validation.md) |
 
 ## Browser: Identity and rendering
 
@@ -59,14 +62,15 @@ Named acceptance checks for the current local Vesper roadmap. Counts are not a p
 
 | Acceptance check | State | Evidence |
 | --- | --- | --- |
-| Bounded MV3 ZIP import | source tested | [Evidence](../docs/extensions.md) |
+| Bounded MV3 ZIP import | verified | [Evidence](../docs/validation.md) |
 | Permissions and versions | source tested | [Evidence](../docs/extensions.md) |
-| Per-profile assignment | source tested | [Evidence](../docs/extensions.md) |
+| Per-profile assignment | verified | [Evidence](../docs/validation.md) |
 | Immutable package checks | source tested | [Evidence](../docs/extensions.md) |
-| Restart storage persistence | source tested | [Evidence](../docs/extensions.md) |
-| Portable extension archive | source tested | [Evidence](../docs/extensions.md) |
+| Restart storage persistence | verified | [Evidence](../docs/validation.md) |
+| Portable extension archive | verified | [Evidence](../docs/validation.md) |
 | Catalog removal | planned | [Evidence](../docs/extensions.md) |
 | Version storage migration | planned | [Evidence](../docs/extensions.md) |
+| Long Windows launch paths | verified | [Evidence](../docs/validation.md) |
 
 ## Browser: Desktop and engines
 
@@ -124,8 +128,8 @@ Named acceptance checks for the current local Vesper roadmap. Counts are not a p
 | Encrypted inputs | verified | [Evidence](../docs/api.md) |
 | Missed-run coalescing | verified | [Evidence](../docs/api.md) |
 | Uncertain admission quarantine | verified | [Evidence](../docs/api.md) |
-| Calendar cron rules | in progress | [Evidence](../docs/research/completion-gates.md) |
-| IANA timezone/DST rules | in progress | [Evidence](../docs/research/completion-gates.md) |
+| Calendar cron rules | verified | [Evidence](../docs/validation.md) |
+| IANA timezone/DST rules | verified | [Evidence](../docs/validation.md) |
 | Wake a sleeping PC | planned | [Evidence](../docs/research/completion-gates.md) |
 
 ## Workbench: Integration
@@ -137,7 +141,7 @@ Named acceptance checks for the current local Vesper roadmap. Counts are not a p
 | TypeScript clients | verified | [Evidence](../docs/api.md) |
 | Python clients | verified | [Evidence](../docs/api.md) |
 | Streamed archive transport | verified | [Evidence](../docs/api.md) |
-| Extension-enabled automation | source tested | [Evidence](../docs/extensions.md) |
+| Extension-enabled automation | verified | [Evidence](../docs/validation.md) |
 | Selenium qualification | planned | [Evidence](../docs/research/completion-gates.md) |
 | Durable event replay coverage | planned | [Evidence](../docs/research/completion-gates.md) |
 
@@ -148,7 +152,7 @@ Named acceptance checks for the current local Vesper roadmap. Counts are not a p
 | Offline update signatures | verified | [Evidence](../docs/validation.md) |
 | Verified upgrade backup | verified | [Evidence](../docs/validation.md) |
 | Preserved coordinator identity | verified | [Evidence](../docs/research/local-desktop-upgrade-identity.md) |
-| New desktop feature release | in progress | [Evidence](../docs/research/completion-gates.md) |
+| New desktop feature release | verified | [Evidence](../docs/validation.md) |
 | Full rollback-cycle test | planned | [Evidence](../docs/research/completion-gates.md) |
 | Forced-exit recovery matrix | planned | [Evidence](../docs/research/completion-gates.md) |
 | Capacity/performance benchmark | planned | [Evidence](../docs/research/completion-gates.md) |

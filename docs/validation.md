@@ -284,3 +284,20 @@ Private evidence: `test-results/desktop-followup/packaged-pair.json`,
 `test-results/extensions/long-path-qualification.json` and
 `test-results/desktop/linux-packages.json`. These records and private profile
 archives are excluded from the public source release.
+
+The actual installed Browser 0.4.2 and enabled Workbench 0.5.4 add-on then
+passed the extended test on the original deep Windows data path. The saved
+archive measured 68,303 bytes with SHA-256
+`fa19d7b373d03e121f721df755082f0a156cc46565a73bf3790d8967bdfecd05`.
+Extension startup, content-script policy, independent archive import, visits
+1 to 2, calendar/DST preview and future-schedule create/pause/remove all passed.
+Existing profiles remained unchanged and all leases were released. The Python
+standard-library SDK independently passed calendar preview and schedule
+lifecycle checks. The upgrade backed up 35,642 files (458,785,304 bytes),
+verified their checksums and preserved the original files before launch.
+
+Actual-installation evidence: `test-results/native-engine/installed-pair-qualification.json`,
+`test-results/desktop-followup/installed-python.json` and the private upgrade
+backup/manifest. Public GitHub CI passed Windows and Linux source checks plus
+the external PostgreSQL integration job. These Linux source checks do not
+qualify the Linux desktop packages or custom native kernel.
