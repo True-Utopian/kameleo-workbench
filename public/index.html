@@ -4,40 +4,61 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <meta name="theme-color" content="#edf2f6">
-    <title>Browser workbench</title>
+    <meta name="theme-color" content="#eef1f5">
+    <meta name="description" content="Vesper Workbench by true-utopian. Browser profiles and repeatable automation on your PC.">
+    <title>Vesper Workbench by true-utopian</title>
+    <link rel="icon" href="/vesper-mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="/app.js"></script>
+    <script type="module" src="/studio.js"></script>
+    <script type="module" src="/navigation.js"></script>
+    <link rel="stylesheet" href="/studio.css">
+    <link rel="stylesheet" href="/navigation.css">
+    <link rel="stylesheet" href="/embedded.css">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to workspace</a>
     <section id="login-screen" class="login-screen" aria-labelledby="login-title">
-      <div class="login-brand"><span class="brand-mark" aria-hidden="true">w</span> Browser workbench</div>
+      <div class="login-brand"><img class="brand-mark" src="/vesper-mark.svg" alt=""><span class="brand-lockup"><strong>Vesper</strong><span>Workbench</span></span><span class="maker-credit">by true-utopian</span></div>
       <div class="login-panel">
-        <div class="login-glyph" aria-hidden="true"><span></span><span></span><span></span></div>
-        <h1 id="login-title">Kameleo Workbench</h1>
-        <p>Sign in to start or resume a browser session.</p>
+        <h1 id="login-title">Your browsers.<br>Your workflows.</h1>
+        <p>Open Vesper Workbench to run automations and pick up saved browser sessions.</p>
         <form id="login-form">
           <label for="access-token">Workbench access token</label>
           <input id="access-token" name="token" type="password" autocomplete="current-password" required placeholder="Enter your access token">
-          <p class="field-hint">Use your workbench token. Your Kameleo token stays on the server.</p>
+          <p class="field-hint">Use the access token generated on this PC.</p>
           <p id="login-error" class="form-error" role="alert" hidden></p>
-          <button id="login-button" class="button primary" type="submit">Open workbench <span aria-hidden="true">↗</span></button>
+          <button id="login-button" class="button primary" type="submit">Open workbench</button>
         </form>
         <p id="login-status" class="login-status" role="status">Checking your session…</p>
       </div>
-      <div class="login-foot">Kameleo · Puppeteer · Profile storage</div>
+      <div class="login-foot"><strong>Vesper Browser</strong> keeps your profiles. <strong>Vesper Workbench</strong> runs your workflows.<span>Built by true-utopian.</span></div>
     </section>
 
     <div id="workspace" class="workspace" hidden>
       <header class="app-header">
-        <a class="brand" href="/" aria-label="Browser workbench home"><span class="brand-mark" aria-hidden="true">w</span><span>Browser <strong>workbench</strong></span></a>
+        <a class="brand" href="/" aria-label="Vesper Workbench home"><img class="brand-mark" src="/vesper-mark.svg" alt=""><span class="brand-lockup"><strong>Vesper</strong><span>Workbench</span></span><span class="maker-credit">by true-utopian</span></a>
         <div class="header-actions">
           <span id="connection-status" class="connection-status" role="status">Connecting</span>
           <button id="system-button" class="engine-button" type="button" aria-haspopup="dialog"><span id="engine-dot" class="status-dot neutral"></span><span id="engine-label">Checking engine</span><span class="chevron" aria-hidden="true">⌄</span></button>
           <button id="logout-button" class="button quiet small" type="button">Sign out</button>
         </div>
       </header>
+
+      <aside class="workspace-navigation"><nav aria-label="Workbench navigation">
+        <button id="runs-view" class="workspace-nav-item" type="button" aria-current="page">Runs & archives</button>
+        <button id="flow-studio-button" class="workspace-nav-item" type="button">Flow editor</button>
+        <button id="schedules-button" class="workspace-nav-item" type="button">Schedules</button>
+        <div class="workspace-nav-divider"></div>
+        <button id="profiles-button" class="workspace-nav-item" type="button" aria-haspopup="dialog" hidden>Browser profiles <span aria-hidden="true">↗</span></button>
+        <button id="proxies-nav" class="workspace-nav-item" type="button">Proxy inventory</button>
+        <button id="settings-nav" class="workspace-nav-item" type="button">Connections & API</button>
+        <div class="workspace-nav-divider"></div>
+        <button id="help-nav" class="workspace-nav-item" type="button">Getting started</button>
+        <button id="local-update-button" class="workspace-nav-item" type="button" hidden>Install app update</button>
+      </nav><p class="workspace-nav-note">Vesper Workbench<br><span>Automation on this PC</span></p></aside>
+
+      <section id="workbench-guide" class="workbench-guide" hidden><h1>Getting started</h1><p>Browser keeps your profiles. Workbench turns a task into a repeatable run.</p><ol class="workbench-guide-steps"><li><h2>Start with an automation</h2><p>Runs & archives shows current work and saved results. New run lets you choose a bundled automation and enter its inputs.</p><button id="guide-start-run" class="button primary" type="button">Start a run</button></li><li><h2>Build your own flow</h2><p>In Flow editor, define the pages and inputs, add actions, and save a draft. Publish it to make that version available in New run.</p><button id="guide-flow" class="button outline" type="button">Open flow editor</button></li><li><h2>Schedule repeat work</h2><p>Choose an automation, its inputs and the next run time. Workbench must be running. Missed repeating intervals combine into one occurrence.</p><button id="guide-schedules" class="button outline" type="button">Open schedules</button></li><li><h2>Keep the result</h2><p>When a run finishes, Workbench stops its browser and saves a verified profile archive. If an action is uncertain, inspect it before retrying. Saved profiles appear in Browser.</p></li></ol></section>
 
       <main id="main" class="workbench" tabindex="-1">
         <aside class="run-sidebar" aria-labelledby="runs-heading">
@@ -73,9 +94,39 @@
 
     <dialog id="new-run-dialog" class="drawer" aria-labelledby="new-run-title"><div class="drawer-shell"><header class="drawer-heading"><div><p>Start a workflow</p><h2 id="new-run-title">New run</h2></div><button type="button" class="button icon-button close-dialog" aria-label="Close new run">×</button></header><form id="new-run-form" class="drawer-form"><div class="drawer-body"><label for="automation-select">Automation</label><select id="automation-select" required></select><p id="automation-description" class="field-hint"></p><fieldset class="preset-fieldset"><legend>Interaction pace</legend><div class="preset-options"><label><input type="radio" name="preset" value="fast" checked><span><strong>Fast</strong><small>Direct actions</small></span></label><label><input type="radio" name="preset" value="natural"><span><strong>Natural</strong><small>Measured pace</small></span></label><label><input type="radio" name="preset" value="natural-fast"><span><strong>Natural fast</strong><small>Shorter pauses</small></span></label></div></fieldset><div class="form-section-heading"><h3>Inputs</h3><button id="input-mode-button" class="text-button" type="button">Edit as JSON</button></div><div id="input-fields" class="schema-fields"></div><div id="json-input-wrap" hidden><label class="sr-only" for="json-input">Automation inputs as JSON</label><textarea id="json-input" class="json-editor" spellcheck="false" rows="12">{}</textarea><p class="field-hint">A JSON object matching this automation’s input schema.</p></div><p id="no-inputs" class="small-note" hidden>This automation does not require inputs.</p><p class="secret-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>Credentials are sent to the run and cleared from this form.</p><p id="new-run-error" class="form-error" role="alert" hidden></p></div><footer class="drawer-footer"><button type="button" class="button outline close-dialog">Cancel</button><button id="create-run-button" class="button primary" type="submit">Start run</button></footer></form></div></dialog>
 
-    <dialog id="system-dialog" class="drawer system-drawer" aria-labelledby="system-title"><div class="drawer-shell"><header class="drawer-heading"><div><p>Connections & capacity</p><h2 id="system-title">System</h2></div><button type="button" class="button icon-button close-dialog" aria-label="Close system panel">×</button></header><div class="drawer-body"><section class="system-section"><div class="section-heading"><h3>Kameleo engine</h3><button id="refresh-system-button" type="button" class="text-button">Refresh</button></div><div id="engine-details"></div></section><section class="system-section"><div class="section-heading"><h3>Proxy inventory</h3><span id="proxy-count"></span></div><p class="field-hint">Saved connections available to your automations. Credentials stay on the server.</p><div id="proxy-list" class="proxy-list"></div></section></div><footer class="drawer-footer"><span class="small-note">Each live view controls its browser display.</span><button type="button" class="button outline close-dialog">Done</button></footer></div></dialog>
+    <dialog id="system-dialog" class="drawer system-drawer" aria-labelledby="system-title"><div class="drawer-shell"><header class="drawer-heading"><div><p>Connections & capacity</p><h2 id="system-title">System</h2></div><button type="button" class="button icon-button close-dialog" aria-label="Close system panel">×</button></header><div class="drawer-body"><section class="system-section"><div class="section-heading"><h3 id="engine-title">Browser engine</h3><button id="refresh-system-button" type="button" class="text-button">Refresh</button></div><div id="engine-details"></div></section><section class="system-section"><div class="section-heading"><h3>Proxy inventory</h3><span id="proxy-count"></span></div><p class="field-hint">Saved connections available to your automations. Credentials stay on the server.</p><div id="proxy-list" class="proxy-list"></div></section></div><footer class="drawer-footer"><span class="small-note">Each live view controls its browser display.</span><button type="button" class="button outline close-dialog">Done</button></footer></div></dialog>
 
+    <dialog id="profiles-dialog" class="drawer system-drawer" aria-labelledby="profiles-title">
+      <div class="drawer-shell">
+        <header class="drawer-heading"><div><p>Stored on this PC</p><h2 id="profiles-title">Vesper Browser</h2></div><button type="button" class="button icon-button close-dialog" aria-label="Close profiles">×</button></header>
+        <div class="drawer-body">
+          <p class="field-hint">Open separate Chromium browsers with their own cookies and storage. Stop a browser before exporting or duplicating it.</p>
+          <form id="profile-form" class="schema-fields">
+            <label for="profile-name">Profile name</label><input id="profile-name" required maxlength="200" placeholder="My browser">
+            <label for="profile-locale">Language</label><input id="profile-locale" placeholder="en-GB">
+            <label for="profile-timezone">Timezone</label><input id="profile-timezone" placeholder="Europe/London">
+            <details><summary>Proxy connection (optional)</summary><div class="schema-fields">
+              <label for="profile-protocol">Protocol</label><select id="profile-protocol"><option value="http">HTTP / CONNECT</option><option value="socks5">SOCKS5</option></select>
+              <label for="profile-host">Host</label><input id="profile-host" autocomplete="off" placeholder="proxy.example.com">
+              <label for="profile-port">Port</label><input id="profile-port" type="number" min="1" max="65535">
+              <label for="profile-username">Username</label><input id="profile-username" autocomplete="off">
+              <label for="profile-password">Password</label><input id="profile-password" type="password" autocomplete="off">
+              <label class="small-note"><input id="profile-remove-proxy" type="checkbox"> Remove the saved proxy when editing</label>
+            </div></details>
+            <p id="profile-error" class="form-error" role="alert" hidden></p>
+            <button id="profile-save" type="submit" class="button primary small">Create profile</button>
+            <button id="profile-cancel-edit" type="button" class="text-button" hidden>Cancel editing</button>
+          </form>
+          <label for="profile-import" class="profile-list-heading">Import a profile archive</label>
+          <input id="profile-import" type="file" accept=".tgz,.workbench.tgz">
+          <div class="section-heading profile-list-heading"><h3>Saved profiles</h3><button id="profiles-refresh" class="text-button" type="button">Refresh</button></div>
+          <div id="local-profiles-list" class="proxy-list"></div>
+          <p class="small-note">Archives restore browser data on this operating system. Encrypted cookies may require this PC and Windows user. Reconnect a proxy after import.</p>
+        </div>
+        <footer class="drawer-footer"><span class="small-note">Vesper Browser by true-utopian.</span><button type="button" class="button outline close-dialog">Done</button></footer>
+      </div>
+    </dialog>
     <div id="toast-region" class="toast-region" role="status" aria-live="polite" aria-atomic="true"></div>
-    <noscript><p class="noscript">Enable JavaScript to use the browser workbench.</p></noscript>
+    <noscript><p class="noscript">Enable JavaScript to use Vesper Workbench.</p></noscript>
   </body>
 </html>

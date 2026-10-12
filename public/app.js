@@ -71,7 +71,7 @@ function disconnectLive({ reset = true } = {}) {
   $('view-label').textContent = 'Browser snapshot';
   $('view-indicator').classList.remove('live');
   if (reset) {
-    $('view-status').textContent = 'Snapshots are still images. Connect live to interact.';
+    $('view-status').textContent = state.status?.engine?.backend === 'local' ? 'Use the native Chromium window to interact.' : 'Snapshots are still images. Connect live to interact.';
     $('snapshot-button').hidden = false;
     $('browser-snapshot').hidden = !state.screenshotUrl;
     $('browser-placeholder').hidden = Boolean(state.screenshotUrl);
@@ -164,7 +164,13 @@ async function refreshAll(announce = true) {
 
 function renderStatus() {
   const engine = state.status?.engine;
-  $('engine-label').textContent = engine ? engine.ready ? 'Engine ready' : 'Engine unavailable' : 'Engine status unknown';
+  const engineName = engine?.backend === 'local' ? 'Vesper Browser' : engine?.backend === 'kameleo' ? 'Kameleo' : 'Browser engine';
+  $('engine-title').textContent = engineName;
+  $('profiles-button').hidden = engine?.backend !== 'local';
+  if (engine?.backend === 'local') {
+    $('view-status').textContent = 'Refresh snapshots here. Use the native Chromium window to interact.';
+  }
+  $('engine-label').textContent = engine ? engine.ready ? `${engineName} ready` : `${engineName} unavailable` : 'Engine status unknown';
   $('engine-dot').className = `status-dot ${engine?.ready ? '' : engine ? 'warning' : 'neutral'}`;
   const capacity = state.status?.config?.maxConcurrency;
   $('capacity-label').textContent = capacity ? `${capacity} concurrent browser${capacity === 1 ? '' : 's'}` : 'Browser capacity unknown';
@@ -174,10 +180,20 @@ function renderStatus() {
   box.append(summary);
   const facts = el('dl', 'engine-facts');
   appendFact(facts, 'Browser capacity', capacity ? String(capacity) : 'Unknown');
+  appendFact(facts, 'Backend', engineName);
+  if (engine?.backend === 'local') appendFact(facts, 'Browser', 'Chromium');
   if (engine?.version) appendFact(facts, 'Engine version', String(engine.version));
   appendFact(facts, 'Runs in progress', String(state.runs.filter(run => IN_PROGRESS.has(run.state)).length));
   appendFact(facts, 'Saved profiles', String(state.runs.filter(run => run.state === 'saved').length));
   box.append(facts);
+  if (engine?.backend === 'local' && engine.managerUrl) {
+    const manager = new URL(engine.managerUrl);
+    if (manager.protocol === 'http:' && manager.hostname === '127.0.0.1' && manager.port) {
+      const link = el('a', 'button outline small', 'Open profile manager');
+      link.href = manager.origin; link.target = '_blank'; link.rel = 'noopener';
+      box.append(link);
+    }
+  }
   if (engine?.error) box.append(el('p', 'form-error', String(engine.error)));
 }
 
@@ -254,13 +270,14 @@ function renderDetail() {
   artifact.hidden = !(run.artifact && run.state === 'saved');
   if (!artifact.hidden) {
     artifact.append(el('strong', '', run.artifact.name || 'Saved browser profile'), el('p', '', `${formatBytes(run.artifact.bytes)} · Verified export`));
-    const link = el('a', 'button outline small', 'Download .kameleo'); link.href = `/api/runs/${encodeURIComponent(run.id)}/artifact`; link.download = run.artifact.name || 'profile.kameleo'; artifact.append(link);
+    const link = el('a', 'button outline small', 'Download profile'); link.href = `/api/runs/${encodeURIComponent(run.id)}/artifact`; link.download = run.artifact.name || 'profile'; artifact.append(link);
     if (run.artifact.sha256) { const details = el('details'); details.append(el('summary', '', 'SHA-256 checksum'), el('code', '', run.artifact.sha256)); artifact.append(details); }
   }
   $('save-explanation').textContent = needsCleanupRecovery(run) ? 'Browser capacity remains reserved until shutdown is confirmed. Recovery does not rerun the automation.' : run.state === 'saved' ? 'The profile export is ready to download.' : run.state === 'export_failed' ? 'The run finished, but its profile export needs another attempt.' : run.state === 'interrupted' ? 'The run was interrupted. Retry export to recover its retained profile.' : run.waitingForFinish ? 'Finish when you are done in the browser. The profile will then be saved.' : run.state === 'cancelled' ? 'This run was cancelled. No verified export is available.' : 'A completed run saves its browser profile for reuse.';
   const active = ACTIVE.has(run.state);
   $('snapshot-button').disabled = !active || state.screenshotBusy;
-  $('live-button').disabled = !canInteract(run) || state.livePending;
+  $('live-button').disabled = !canInteract(run) || state.livePending || state.status?.engine?.backend === 'local';
+  $('live-button').hidden = state.status?.engine?.backend === 'local';
   if (!active && (state.rfb || state.livePending)) disconnectLive();
   if (state.rfb) {
     state.rfb.viewOnly = !canInteract(run);
@@ -415,8 +432,13 @@ function updateInputMode() {
   $('input-fields').querySelectorAll('input,select,textarea').forEach(control => { control.disabled = state.jsonMode; });
   $('input-mode-button').textContent = state.jsonMode ? 'Use form fields' : 'Edit as JSON';
 }
-function openNewRun(automationId) {
-  if (!state.authenticated) return;
+let openingRun = false;
+async function openNewRun(automationId) {
+  if (!state.authenticated || openingRun) return;
+  openingRun = true;
+  try { state.automations = await api('/api/automations'); if (!state.authenticated) return; populateAutomations(); }
+  catch (error) { toast(messageOf(error)); return; }
+  finally { openingRun = false; }
   $('new-run-form').reset(); state.jsonMode = false;
   if (automationId && state.automations.some(item => item.id === automationId)) $('automation-select').value = automationId;
   renderAutomationInputs(); $('new-run-dialog').showModal();
@@ -440,7 +462,7 @@ async function refreshSnapshot(manual = false) {
     state.screenshotUrl = URL.createObjectURL(blob); state.snapshotRun = id;
     $('browser-snapshot').src = state.screenshotUrl; $('browser-snapshot').hidden = false; $('browser-placeholder').hidden = true;
     $('snapshot-time').textContent = `Captured ${timeOf(Date.now())}`;
-    $('view-status').textContent = 'Snapshot, refreshed every 5 seconds. Connect live to interact.';
+    $('view-status').textContent = state.status?.engine?.backend === 'local' ? 'Snapshot, refreshed every 5 seconds. Use the native Chromium window to interact.' : 'Snapshot, refreshed every 5 seconds. Connect live to interact.';
   } catch (error) {
     if (state.selectedId === id && !state.rfb && !state.livePending) {
       $('view-status').textContent = messageOf(error);
@@ -607,10 +629,79 @@ $('fullscreen-button').addEventListener('click', async () => {
   try { if (document.fullscreenElement) await document.exitFullscreen(); else await $('browser-stage').requestFullscreen(); }
   catch { toast('Fullscreen is not available in this browser.'); }
 });
+async function loadProfiles() {
+  const list = $('local-profiles-list');
+  try {
+    const profiles = await api('/api/local-profiles'); list.replaceChildren();
+    if (!profiles.length) list.append(el('p', 'list-empty', 'Create your first local browser profile above.'));
+    for (const profile of profiles) {
+      const row = el('section', 'local-profile-row');
+      row.append(el('strong', '', profile.name), el('p', 'small-note', `${profile.state} · ${shortId(profile.id)} · ${profile.hasProxy ? 'Proxy connected' : 'Direct connection'}`));
+      const actions = el('div', 'run-actions');
+      if (profile.state !== 'running') {
+        const edit = el('button', 'button outline small', 'Edit'); edit.type = 'button';
+        edit.addEventListener('click', () => {
+          $('profile-form').reset(); $('profile-form').dataset.editing = profile.id;
+          $('profile-name').value = profile.name; $('profile-locale').value = profile.settings.locale || ''; $('profile-timezone').value = profile.settings.timezone || '';
+          $('profile-save').textContent = 'Save profile'; $('profile-cancel-edit').hidden = false;
+          $('profile-name').focus(); $('profile-name').scrollIntoView({ block: 'center' });
+        }); actions.append(edit);
+      }
+      for (const operation of profile.state === 'running' ? ['stop'] : ['start', 'duplicate']) {
+        const button = el('button', 'button outline small', operation === 'start' ? 'Open browser' : operation === 'stop' ? 'Stop browser' : 'Duplicate'); button.type = 'button';
+        button.addEventListener('click', async () => {
+          button.disabled = true; showError('profile-error', '');
+          try { await api(`/api/local-profiles/${encodeURIComponent(profile.id)}/${operation}`, { method: 'POST' }); await loadProfiles(); await refreshAll(false); }
+          catch (error) { showError('profile-error', messageOf(error)); button.disabled = false; }
+        }); actions.append(button);
+      }
+      if (profile.state !== 'running') {
+        const archive = el('a', 'button outline small', 'Export'); archive.href = `/api/local-profiles/${encodeURIComponent(profile.id)}/archive`; archive.download = `${profile.id}.workbench.tgz`; actions.append(archive);
+      }
+      row.append(actions); list.append(row);
+    }
+  } catch (error) { showError('profile-error', messageOf(error)); }
+}
+$('profiles-button').addEventListener('click', () => { if(window.vesperDesktop?.openBrowserManager){void window.vesperDesktop.openBrowserManager().catch(error=>toast(messageOf(error)));return;} $('profiles-dialog').showModal(); loadProfiles(); });
+$('profiles-refresh').addEventListener('click', loadProfiles);
+function resetProfileForm() { $('profile-form').reset(); delete $('profile-form').dataset.editing; $('profile-save').textContent = 'Create profile'; $('profile-cancel-edit').hidden = true; }
+$('profile-cancel-edit').addEventListener('click', resetProfileForm);
+$('profile-import').addEventListener('change', async event => {
+  const file = event.target.files[0]; if (!file) return;
+  showError('profile-error', ''); event.target.disabled = true;
+  try {
+    if (file.size > 512 * 1024 ** 2) throw new Error('Archive exceeds 512 MiB. Use the local CLI for larger archives.');
+    const response = await fetch('/api/local-profiles/import', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/gzip' }, body: file });
+    if (!response.ok) throw new Error((await response.json()).error || 'Profile import failed.');
+    await loadProfiles(); toast('Profile imported. Add its proxy connection before opening.');
+  } catch (error) { showError('profile-error', messageOf(error)); }
+  finally { event.target.value = ''; event.target.disabled = false; }
+});
+$('profile-form').addEventListener('submit', async event => {
+  event.preventDefault(); showError('profile-error', '');
+  const button = event.currentTarget.querySelector('button[type="submit"]'); button.disabled = true;
+  try {
+    const body = { name: $('profile-name').value };
+    if ($('profile-locale').value.trim()) body.locale = $('profile-locale').value.trim();
+    if ($('profile-timezone').value.trim()) body.timezone = $('profile-timezone').value.trim();
+    if ($('profile-host').value.trim()) {
+      body.proxy = { value: $('profile-protocol').value, extra: { host: $('profile-host').value.trim(), port: Number($('profile-port').value) } };
+      if ($('profile-username').value) body.proxy.extra.id = $('profile-username').value;
+      if ($('profile-password').value) body.proxy.extra.secret = $('profile-password').value;
+    }
+    const editing = $('profile-form').dataset.editing;
+    if (editing && $('profile-remove-proxy').checked) body.proxy = null;
+    await api(editing ? `/api/local-profiles/${encodeURIComponent(editing)}` : '/api/local-profiles', { method: editing ? 'PATCH' : 'POST', body });
+    resetProfileForm(); await loadProfiles(); toast(editing ? 'Profile saved.' : 'Local profile created.');
+  } catch (error) { showError('profile-error', messageOf(error)); }
+  finally { $('profile-password').value = ''; button.disabled = false; }
+});
 $('system-button').addEventListener('click', () => { $('system-dialog').showModal(); renderStatus(); $('proxy-list').replaceChildren(el('p', 'list-empty', 'Loading connections…')); loadSystem(); });
 $('refresh-system-button').addEventListener('click', loadSystem);
 window.addEventListener('pagehide', () => { state.source?.close(); disconnectLive({ reset: false }); clearInterval(state.interval); });
+window.vesperDesktop?.onDownload(value=>toast(value.state==='completed'?`Saved ${value.filename}. Find it under Vesper → Show downloads.`:'Download '+value.state));
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state.authenticated) refreshAll(false); });
+document.addEventListener('vesper:flow-published', () => { void refreshAll(false); });
 
 try { const session = await api('/api/session'); if (session?.authenticated) await loadWorkspace(); else signOutLocally(); }
 catch { $('login-status').textContent = 'Sign in to access your browsers.'; }

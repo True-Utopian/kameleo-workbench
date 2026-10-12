@@ -3,8 +3,10 @@ import cookie from '@fastify/cookie';
 import staticFiles from '@fastify/static';
 import websocket from '@fastify/websocket';
 import { WebSocket } from 'ws';
-import { createReadStream } from 'node:fs';
-import { realpath } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, realpath, rm } from 'node:fs/promises';
+import { Transform, type Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ServerResponse } from 'node:http';
@@ -13,9 +15,18 @@ import type { Config } from './config.js';
 import type { PacePreset } from './actions.js';
 import { registerFixture } from './fixture.js';
 import { prepareAssets } from './assets.js';
+import type { EngineAdapter } from './engine.js';
+import { isLocalEngine } from './local-engine.js';
+import { randomUUID } from 'node:crypto';
+import swagger from '@fastify/swagger';
+import { AdmissionJournal } from '@true-utopian/vesper-browser';
+import { Scheduler } from './scheduler.js';
+import { calendarOccurrences } from './calendar.js';
+import { FlowLibrary, type FlowPublisher } from './flow-library.js';
+import type { FlowPack, FlowManifest } from './flows/types.js';
 
 // The interface makes API tests independent of a running, licensed engine.
-export interface WorkbenchRuntime {
+export interface WorkbenchRuntime extends FlowPublisher {
   listAutomations(): unknown;
   submit(input: { automationId: string; inputs: Record<string, unknown>; preset?: PacePreset; identityId?: string }): unknown;
   list(): any[];
@@ -38,9 +49,20 @@ const paceSchema = { anyOf: [
 ] };
 function httpError(statusCode: number, message: string) { return Object.assign(new Error(message), { statusCode }); }
 
-export async function createServer(config: Config, runtime: WorkbenchRuntime, proxies: WorkbenchProxies) {
+export async function createServer(config: Config, runtime: WorkbenchRuntime, proxies: WorkbenchProxies, engine?: EngineAdapter) {
   const app = Fastify({ logger: false, bodyLimit: 256 * 1024, trustProxy: false });
   const access = new AccessControl(config.token);
+  const admissions = new AdmissionJournal(path.join(config.dataDir, 'admissions'));
+  const scheduler = new Scheduler(path.join(config.dataDir, 'scheduler'), runtime);
+  const flowLibrary = new FlowLibrary(path.join(config.dataDir,'flow-library'),runtime);
+  await scheduler.init();
+  app.addHook('onClose', () => scheduler.close());
+  await app.register(swagger, { openapi: { info: { title: 'Vesper Workbench by true-utopian', version: '1.0.0' }, components: { securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } } }, security: [{ bearer: [] }] } });
+  app.addHook('onRoute', route => {
+    if (route.url?.startsWith('/api/') && !route.url.startsWith('/api/v1/') && route.method !== 'HEAD') {
+      app.route({ ...route, url: route.url.replace(/^\/api\//, '/api/v1/') });
+    }
+  });
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const assets = await prepareAssets(path.join(root, 'public'), path.join(config.dataDir, 'assets'));
   const viewers = new Map<WebSocket, { id: string; session?: string; bearer?: string }>();
@@ -62,7 +84,7 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
     const origin = request.headers.origin;
     const expectedOrigin = config.publicOrigin ?? `${request.protocol}://${request.host}`;
     if (origin && origin !== expectedOrigin) throw httpError(403, 'Origin is not allowed.');
-    if (request.url.split('?')[0] === '/api/login') return;
+    if (request.url.split('?')[0]!.replace(/^\/api\/v1\//, '/api/') === '/api/login') return;
     if (!authenticate(request)) throw httpError(401, 'Sign in to the workbench.');
   });
   app.setErrorHandler((error, _request, reply) => {
@@ -71,6 +93,18 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
     reply.code(status >= 400 && status <= 599 ? status : 500).send({ error: status < 500 && error instanceof Error ? error.message : 'The operation failed. Check the run state or engine availability.' });
   });
   app.get('/healthz', async () => ({ ok: true }));
+  app.get('/api/capabilities', async () => ({ product: 'Vesper Workbench', author: 'true-utopian', version: '0.5.4', apiVersion: '1.0', capabilities: { scripts: true, schedules:true, calendarSchedules:{cronFields:5,timezones:true,preview:true,missedRuns:"coalesce"}, scheduleRecovery:'quarantine-uncertain-admission', flowEditor:!!runtime.installFlow, immutablePublishedRuns:true, flows: !!(config.databaseUrl || config.localCoordinator), localCoordinator: !!config.localCoordinator, idempotentAdmission: true, runControls: true, evidence: true, screenshots: true, archives: true, events: 'sse', browserService: !!config.vesperBrowserUrl } }));
+  app.get('/api/openapi.json', async () => app.swagger());
+  app.get('/api/schedules', async () => scheduler.list());
+  app.post<{ Body: Record<string, unknown> }>('/api/schedules', { schema: { body: { type: 'object', required: ['name','automationId','inputs'], additionalProperties: false, properties: { name: { type: 'string', minLength: 1, maxLength: 120 }, automationId: { type: 'string' }, inputs: { type: 'object' }, nextAt: { type: 'integer', minimum: 0 }, intervalMs: { type: 'integer', minimum: 60000, maximum: 31536000000 },cron:{type:'string',minLength:1,maxLength:160},timezone:{type:'string',minLength:1,maxLength:120} } } } }, request => scheduler.create(request.body));
+  app.post<{Body:{cron:string;timezone?:string;after?:number}}>('/api/schedules/preview',{schema:{body:{type:'object',required:['cron'],additionalProperties:false,properties:{cron:{type:'string',minLength:1,maxLength:160},timezone:{type:'string',minLength:1,maxLength:120},after:{type:'integer',minimum:0,maximum:8639999999999999}}}}},request=>({occurrences:calendarOccurrences(request.body.cron,request.body.timezone??'UTC',request.body.after??Date.now())}));
+  for (const action of ['pause','resume','remove'] as const) app.post<{ Params: { id: string } }>(`/api/schedules/:id/${action}`, request => scheduler.control(request.params.id, action));
+  app.get('/api/flow-library', async () => ({...await flowLibrary.list(),defaults:{origin:config.fixtureOrigin,fixture:!!config.fixtureOrigin}}));
+  app.post<{ Body: { pack: FlowPack; manifest: FlowManifest; revision: number; layout?: Record<string,{x:number;y:number}> } }>('/api/flow-library', { schema: { body: { type: 'object', required: ['pack','manifest','revision'], additionalProperties: false, properties: { pack: { type: 'object' }, manifest: { type: 'object' }, revision: { type: 'integer', minimum: 0 }, layout: {type:'object',additionalProperties:{type:'object',required:['x','y'],additionalProperties:false,properties:{x:{type:'number',minimum:0,maximum:10000},y:{type:'number',minimum:0,maximum:10000}}}} } } } }, async request => {
+    try { return await flowLibrary.save(request.body.pack,request.body.manifest,request.body.revision,request.body.layout); }
+    catch (error) { if ((error as Error).name === 'FlowCompileError') throw httpError(400,(error as Error).message); throw error; }
+  });
+  app.post<{ Params: { id: string }; Body: { revision: number } }>('/api/flow-library/:id/publish', { schema: { body: { type: 'object', required: ['revision'], additionalProperties: false, properties: { revision: { type: 'integer', minimum: 1 } } } } }, request => flowLibrary.publish(request.params.id,request.body.revision));
   app.post<{ Body: { token: string } }>('/api/login', {
     schema: { body: { type: 'object', required: ['token'], additionalProperties: false, properties: { token: { type: 'string', maxLength: 512 } } } },
   }, async (request, reply) => {
@@ -91,15 +125,88 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
   });
   app.get('/api/status', async () => {
     let ready = false;
-    try { ready = (await fetch(`${config.engineUrl}/general/healthcheck`, { signal: AbortSignal.timeout(2500) })).ok; } catch {}
+    try {
+      if (engine) { await engine.ready(); ready = true; }
+      else ready = (await fetch(`${config.engineUrl}/general/healthcheck`, { signal: AbortSignal.timeout(2500) })).ok;
+    } catch {}
     const runs = runtime.list();
-    return { engine: { ready, ...(!ready ? { error: 'Engine is not ready.' } : {}) }, config: { maxConcurrency: config.maxConcurrency }, coordinator: runtime.stats ? await runtime.stats() : undefined, stats: { total: runs.length, active: runs.filter(run => activeStates.has(run.state)).length, saved: runs.filter(run => run.state === 'saved').length, cleanupRequired: runs.filter(run => run.cleanupRequired && ['failed', 'cancelled', 'interrupted', 'export_failed'].includes(run.state)).length } };
+    return { engine: { ready, backend: engine?.kind ?? 'kameleo', ...(config.vesperBrowserUrl ? { managerUrl: config.vesperBrowserUrl } : {}), ...(!ready ? { error: config.vesperBrowserUrl ? 'Vesper Browser service is unavailable. Start Browser and check its access token file.' : engine?.kind === 'local' ? 'Local Chromium is unavailable. Run npm run browser:install while the service is stopped, or configure LOCAL_BROWSER_EXECUTABLE.' : 'Engine is not ready.' } : {}) }, config: { maxConcurrency: config.maxConcurrency }, coordinator: runtime.stats ? await runtime.stats() : undefined, stats: { total: runs.length, active: runs.filter(run => activeStates.has(run.state)).length, saved: runs.filter(run => run.state === 'saved').length, cleanupRequired: runs.filter(run => run.cleanupRequired && ['failed', 'cancelled', 'interrupted', 'export_failed'].includes(run.state)).length } };
   });
+  if (isLocalEngine(engine)) {
+    app.addContentTypeParser('application/gzip', (_request, stream, done) => done(null, stream));
+    const unowned = (id: string) => {
+      if (runtime.list().some(run => run.profileId === id && (['starting', 'running', 'awaiting_input', 'paused', 'saving'].includes(run.state) || run.cleanupRequired))) throw httpError(409, 'This profile belongs to an active run. Use its run controls.');
+    };
+    app.get('/api/local-profiles', async () => engine.listProfiles());
+    app.post<{ Body: Readable }>('/api/local-profiles/import', async (request, reply) => {
+      if (request.headers['content-type']?.split(';')[0] !== 'application/gzip') throw httpError(415, 'Upload a .workbench.tgz archive as application/gzip.');
+      const directory = path.join(config.dataDir, 'imports'); await mkdir(directory, { recursive: true, mode: 0o700 });
+      const file = path.join(directory, `${randomUUID()}.tgz`); let size = 0;
+      const limit = new Transform({ transform(chunk: Buffer, _encoding, callback) {
+        size += chunk.length;
+        if (size > 512 * 1024 ** 2) callback(httpError(413, 'Profile upload exceeds 512 MiB. Use the local CLI for larger archives.'));
+        else callback(null, chunk);
+      } });
+      try {
+        await pipeline(request.body, limit, createWriteStream(file, { flags: 'wx', mode: 0o600 }));
+        const imported = await engine.importProfile(file); reply.code(201); return imported;
+      } catch (error) {
+        if ((error as { statusCode?: number }).statusCode === 413) throw error;
+        throw httpError(400, 'Profile import failed. Use a valid local workbench archive from this operating system.');
+      } finally { await rm(file, { force: true }); }
+    });
+    app.post<{ Body: Record<string, unknown> }>('/api/local-profiles', {
+      schema: { body: { type: 'object', additionalProperties: false, properties: {
+        name: { type: 'string', maxLength: 200 }, locale: { type: 'string', maxLength: 80 }, timezone: { type: 'string', maxLength: 80 },
+        viewport: { type: 'object', additionalProperties: false, required: ['width', 'height'], properties: { width: { type: 'integer', minimum: 320, maximum: 7680 }, height: { type: 'integer', minimum: 200, maximum: 4320 }, deviceScaleFactor: { type: 'number', minimum: 0.5, maximum: 4 } } },
+        proxy: { type: 'object', additionalProperties: false, required: ['value', 'extra'], properties: { value: { enum: ['http', 'socks5'] }, extra: { type: 'object', additionalProperties: false, required: ['host', 'port'], properties: { host: { type: 'string', maxLength: 253 }, port: { type: 'integer', minimum: 1, maximum: 65535 }, id: { type: 'string', maxLength: 1024 }, secret: { type: 'string', maxLength: 1024 } } } } },
+      } } },
+    }, async (request, reply) => {
+      try { const profile = await engine.create(request.body); reply.code(201); return profile; }
+      catch { throw httpError(400, 'Could not create the profile. Check its locale, timezone and proxy settings.'); }
+    });
+    app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/local-profiles/:id', {
+      schema: { body: { type: 'object', additionalProperties: false, properties: {
+        name: { type: 'string', minLength: 1, maxLength: 200 }, locale: { type: 'string', maxLength: 80 }, timezone: { type: 'string', maxLength: 80 },
+        viewport: { type: 'object', additionalProperties: false, required: ['width', 'height'], properties: { width: { type: 'integer', minimum: 320, maximum: 7680 }, height: { type: 'integer', minimum: 200, maximum: 4320 }, deviceScaleFactor: { type: 'number', minimum: 0.5, maximum: 4 } } },
+        proxy: { anyOf: [{ type: 'null' }, { type: 'object', additionalProperties: false, required: ['value', 'extra'], properties: { value: { enum: ['http', 'socks5'] }, extra: { type: 'object', additionalProperties: false, required: ['host', 'port'], properties: { host: { type: 'string', maxLength: 253 }, port: { type: 'integer', minimum: 1, maximum: 65535 }, id: { type: 'string', maxLength: 1024 }, secret: { type: 'string', maxLength: 1024 } } } } }] },
+      } } },
+    }, async request => {
+      unowned(request.params.id);
+      try { await engine.update(request.params.id, request.body); return { ok: true }; }
+      catch { throw httpError(409, 'Could not update the profile. Stop its browser and check the settings.'); }
+    });
+    for (const operation of ['start', 'stop', 'duplicate'] as const) {
+      app.post<{ Params: { id: string } }>(`/api/local-profiles/:id/${operation}`, async request => {
+        unowned(request.params.id);
+        if (operation === 'start' && runtime.list().some(run => ['queued', 'starting', 'running', 'awaiting_input', 'paused', 'saving'].includes(run.state))) throw httpError(409, 'Finish queued and active runs before opening a profile manually.');
+        return await engine[operation](request.params.id) ?? { ok: true };
+      });
+    }
+    app.get<{ Params: { id: string } }>('/api/local-profiles/:id/archive', async (request, reply) => {
+      unowned(request.params.id);
+      const name = `manual-${randomUUID()}${engine.archiveExtension}`;
+      const file = path.join(config.localExportDir, name);
+      await engine.export(request.params.id, file);
+      reply.type('application/gzip').header('Content-Disposition', `attachment; filename="${name}"`);
+      return reply.send(createReadStream(file));
+    });
+  }
   app.get('/api/automations', async () => runtime.listAutomations());
   app.get('/api/runs', async () => runtime.list());
   app.post<{ Body: { automationId: string; inputs: Record<string, unknown>; preset?: PacePreset; identityId?: string } }>('/api/runs', {
     schema: { body: { type: 'object', required: ['automationId', 'inputs'], additionalProperties: false, properties: { automationId: { type: 'string', minLength: 1, maxLength: 80 }, inputs: { type: 'object' }, preset: paceSchema, identityId: { type: 'string', pattern: '^[a-f0-9-]{36}$' } } } },
-  }, async (request, reply) => { try { const run = await runtime.submit(request.body); reply.code(202); return run; } catch { throw httpError(400, 'Unknown automation, invalid inputs, or runtime unavailable.'); } });
+  }, async (request, reply) => {
+    if (isLocalEngine(engine)) {
+      const activeProfiles = new Set(runtime.list().filter(run => ['starting', 'running', 'awaiting_input', 'paused', 'saving'].includes(run.state)).map(run => run.profileId));
+      if ((await engine.listProfiles()).some(profile => profile.state === 'running' && !activeProfiles.has(profile.id))) throw httpError(409, 'Stop manually opened profiles before starting an automation run.');
+    }
+    const submit = async () => { try { return await runtime.submit(request.body); } catch { throw httpError(400, 'Unknown automation, invalid inputs, or runtime unavailable.'); } };
+    const key = request.headers['idempotency-key'];
+    try {
+      const run = typeof key === 'string' ? await admissions.execute(key, request.body, submit) : await submit(); reply.code(202); return run;
+    } catch (error) { if (error instanceof Error && 'status' in error) throw httpError(Number(error.status), error.message); throw error; }
+  });
   const getRun = (id: string) => { try { const run = runtime.get(id); if (run) return run; } catch {} throw httpError(404, 'Run not found.'); };
   app.get<{ Params: { id: string } }>('/api/runs/:id', async request => getRun(request.params.id));
   app.get<{ Params: { id: string } }>('/api/runs/:id/evidence', async request => { getRun(request.params.id); return runtime.evidence ? runtime.evidence(request.params.id) : []; });
@@ -120,7 +227,7 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
     const directory = await realpath(config.localExportDir);
     const file = await realpath(run.artifact.path);
     const relative = path.relative(directory, file);
-    if (relative.startsWith('..') || path.isAbsolute(relative) || !file.endsWith('.kameleo')) throw httpError(403, 'Artifact path is outside the export directory.');
+    if (relative.startsWith('..') || path.isAbsolute(relative) || !['.kameleo', '.workbench.tgz'].some(extension => file.endsWith(extension))) throw httpError(403, 'Artifact path is outside the export directory.');
     reply.type('application/octet-stream').header('Content-Disposition', `attachment; filename="${path.basename(file).replace(/[^a-zA-Z0-9_.-]/g, '_')}"`);
     return reply.send(createReadStream(file));
   });

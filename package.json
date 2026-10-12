@@ -1,7 +1,7 @@
 {
-  "name": "kameleo-workbench",
-  "version": "0.2.0",
-  "description": "A script-driven workbench for headed Kameleo browsers, Puppeteer automation and verified profile exports.",
+  "name": "@true-utopian/vesper-workbench",
+  "version": "0.5.4",
+  "description": "Vesper Workbench by true-utopian: local browser automation, durable pipelines and verified profile exports.",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -21,42 +21,75 @@
     "./interaction": "./dist/interaction/index.js"
   },
   "bin": {
-    "kameleo-workbench": "dist/cli.js"
+    "kameleo-workbench": "dist/cli.js",
+    "vesper-workbench": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "browser:install": "npm run build && node --env-file-if-exists=.env dist/cli.js browser-install",
+    "smoke:local": "npm run build && node scripts/local-smoke.mjs",
+    "smoke:local-flow": "npm run build && node scripts/local-flow-smoke.mjs",
+    "build": "npm run build --workspace @true-utopian/vesper-browser && tsc -p tsconfig.json",
     "start": "node --env-file-if-exists=.env dist/cli.js serve",
-    "dev": "tsx --env-file-if-exists=.env src/cli.ts serve",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test test/*.test.ts",
+    "dev": "npm run build --workspace @true-utopian/vesper-browser && tsx --env-file-if-exists=.env src/cli.ts serve",
+    "typecheck": "npm run build --workspace @true-utopian/vesper-browser && tsc -p tsconfig.json --noEmit",
+    "test": "npm run build --workspace @true-utopian/vesper-browser && npm test --workspace @true-utopian/vesper-browser && tsx --test test/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "smoke": "node --env-file-if-exists=.env scripts/smoke.mjs",
     "smoke:proxy": "node --env-file-if-exists=.env scripts/proxy-smoke.mjs",
     "token": "node --env-file-if-exists=.env dist/cli.js token",
     "doctor": "node --env-file-if-exists=.env dist/cli.js doctor",
     "calibrate:interaction": "node scripts/calibrate-interaction.mjs",
-    "score:interaction": "node scripts/score-interaction.mjs"
+    "score:interaction": "node scripts/score-interaction.mjs",
+    "observe:browser": "npm run build && node scripts/browser-observations.mjs",
+    "browser:serve": "node packages/vesper-browser/dist/cli.js serve",
+    "browser:token": "node packages/vesper-browser/dist/cli.js token",
+    "smoke:pair": "npm run build && node scripts/vesper-pair-smoke.mjs",
+    "start:connected": "node --env-file-if-exists=.env --env-file=vesper.local.env dist/cli.js serve",
+    "desktop:workbench": "npm run build && electron desktop/main.cjs",
+    "package:windows": "npm run build && node scripts/desktop-build.mjs browser win32 --full && node scripts/desktop-build.mjs workbench win32 --full",
+    "package:linux": "npm run build && node scripts/desktop-build.mjs browser linux --dir && node scripts/desktop-build.mjs workbench linux --dir && node scripts/check-linux-package.mjs",
+    "package:source": "node scripts/source-release.mjs",
+    "package:workbench-addon": "node scripts/workbench-plugin.mjs",
+    "qualify:native": "npm run build && node scripts/native-fingerprint-qualification.mjs",
+    "qualify:desktop": "node scripts/native-desktop-qualification.mjs",
+    "package:native-manifest": "node scripts/native-engine-release.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@fastify/cookie": "^11.1.2",
     "@fastify/static": "^10.1.5",
+    "@fastify/swagger": "9.7.0",
     "@fastify/websocket": "^11.3.1",
-    "@kameleo/local-api-client": "5.2.0",
     "@novnc/novnc": "^1.7.0",
+    "@puppeteer/browsers": "3.2.3",
+    "@true-utopian/vesper-browser": "0.4.2",
     "ajv": "^8.17.1",
+    "cron-parser": "5.10.2",
     "fastify": "5.12.5",
     "https-proxy-agent": "^7.0.6",
     "pg": "^8.23.1",
+    "proxy-chain": "3.0.1",
     "puppeteer-core": "25.12.0",
     "socks-proxy-agent": "^8.0.5",
+    "tar": "7.5.22",
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8",
+    "@resvg/resvg-js": "2.6.2",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
     "@types/ws": "^8.18.1",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "playwright": "1.58.2",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3"
-  }
+  },
+  "author": "true-utopian",
+  "optionalDependencies": {
+    "@kameleo/local-api-client": "5.2.0"
+  },
+  "workspaces": [
+    "packages/vesper-browser"
+  ]
 }

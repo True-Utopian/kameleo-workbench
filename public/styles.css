@@ -11,12 +11,12 @@
   svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
 }
 @layer base {
-  :root { --canvas: #edf2f6; --ink: #203647; --blue: #255f9c; --teal: #237969; --white: #fff; --warning: #a45a16; --muted: #627483; --line: #d8e1e8; --soft: #f5f8fa; --blue-wash: #e8f0f9; --teal-wash: #e7f3ee; --warning-wash: #fff3e6; --radius: 8px; font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif; color: var(--ink); background: var(--canvas); font-size: 14px; line-height: 1.5; }
+  :root { --canvas: #eef1f5; --ink: #283144; --blue: #376e64; --teal: #2b7665; --white: #fff; --warning: #a45a16; --muted: #647186; --line: #d9dfe8; --soft: #f6f7fa; --blue-wash: #e4f0eb; --teal-wash: #e7f3ee; --warning-wash: #fff3e6; --radius: 8px; font-family: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif; color: var(--ink); background: var(--canvas); font-size: 14px; line-height: 1.5; }
   body { min-width: 320px; }
   a { color: var(--blue); text-underline-offset: 3px; }
   button { color: inherit; }
   button, input, select, textarea, a { touch-action: manipulation; }
-  :focus-visible { outline: 3px solid #729eca; outline-offset: 3px; }
+  :focus-visible { outline: 3px solid #8e92bb; outline-offset: 3px; }
   h1, h2, h3 { line-height: 1.25; font-weight: 600; }
   h1 { font-size: 22px; letter-spacing: -.6px; }
   h2 { font-size: 24px; letter-spacing: -.65px; }
@@ -72,11 +72,14 @@
 }
 @layer components {
   .brand { display: inline-flex; align-items: center; gap: 11px; color: var(--ink); text-decoration: none; font-size: 17px; letter-spacing: -.4px; white-space: nowrap; }
-  .brand strong { font-weight: 650; }
-  .brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px 8px 8px 2px; background: var(--blue); color: white; font-size: 27px; font-weight: 650; padding-bottom: 5px; letter-spacing: -4px; padding-right: 4px; }
+  .brand-lockup { display: flex; flex-direction: column; gap: 1px; line-height: 1.1; }
+  .brand-lockup strong { font-size: 19px; font-weight: 650; letter-spacing: -.7px; }
+  .brand-lockup > span { font-size: 11px; letter-spacing: .1px; font-weight: 400; color: var(--muted); }
+  .maker-credit { margin-left: 12px; color: var(--muted); font-size: 11px; font-weight: 400; letter-spacing: 0; }
+  .brand-mark { display: block; width: 36px; height: 36px; flex: 0 0 auto; }
   .button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 41px; padding: 9px 16px; font-weight: 600; font-size: 13px; border: 1px solid transparent; border-radius: 6px; text-decoration: none; line-height: 1.45; }
   .button.primary { color: white; background: var(--blue); border-color: var(--blue); }
-  .button.primary:hover { background: #1d4e82; }
+  .button.primary:hover { background: #428579; }
   .button.outline { border-color: #bccbd6; background: var(--white); }
   .button.outline:hover, .button.quiet:hover { background: var(--soft); }
   .button.quiet { background: transparent; color: var(--muted); }
@@ -172,7 +175,7 @@
   .preset-options strong { font-size: 12px; font-weight: 600; }
   .preset-options small { font-size: 10px; color: var(--muted); }
   .preset-options input:checked + span { border-color: var(--blue); background: var(--blue-wash); color: var(--blue); }
-  .preset-options input:focus-visible + span { outline: 3px solid #729eca; outline-offset: 2px; }
+  .preset-options input:focus-visible + span { outline: 3px solid #8e92bb; outline-offset: 2px; }
   .form-section-heading { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 16px; }
   .schema-fields { display: grid; gap: 18px; }
   .schema-field { display: flex; flex-direction: column; gap: 6px; }
@@ -205,27 +208,31 @@
   .login-screen { min-height: 100dvh; display: flex; flex-direction: column; padding: 35px 45px; }
   .login-brand { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; letter-spacing: -.3px; }
   .login-panel { max-width: 425px; width: 100%; margin: auto; padding: 60px 0 50px; }
-  .login-glyph { display: flex; gap: 5px; align-items: flex-end; height: 38px; margin-bottom: 25px; }
-  .login-glyph span { width: 9px; background: #a8c3d7; height: 19px; border-radius: 2px; }
-  .login-glyph span:nth-child(2) { height: 29px; background: #6494b8; }
-  .login-glyph span:nth-child(3) { height: 38px; background: var(--blue); }
   .login-panel h1 { font-size: 32px; letter-spacing: -1px; line-height: 1.17; }
   .login-panel > p { color: var(--muted); font-size: 15px; line-height: 1.8; margin: 15px 0 29px; }
   .login-panel form { padding: 26px; background: white; border: 1px solid #d3dfe8; border-radius: 9px; }
   .login-panel label { font-size: 12px; display: block; margin-bottom: 8px; }
   .login-panel input { width: 100%; }
-  .login-panel .button { margin-top: 23px; width: 100%; justify-content: space-between; }
+  .login-panel .button { margin-top: 23px; width: 100%; justify-content: center; }
   .login-panel .field-hint { font-size: 11px; }
   .login-panel .login-status { min-height: 18px; font-size: 11px; margin: 15px 0 0; text-align: center; }
-  .login-foot { color: var(--muted); font-size: 11px; }
+  .login-foot { color: var(--muted); font-size: 12px; line-height: 1.8; max-width: 520px; }
+  .login-foot strong { font-weight: 600; color: var(--ink); }
+  .login-foot > span { display: block; margin-top: 3px; font-size: 11px; }
   .toast-region { position: fixed; bottom: 23px; left: 50%; transform: translateX(-50%); z-index: 10; pointer-events: none; max-width: calc(100% - 40px); }
   .toast { background: var(--ink); color: white; padding: 12px 18px; border-radius: 6px; box-shadow: 0 5px 20px #20364726; font-size: 12px; }
   .noscript { position: fixed; inset: 0; background: var(--white); padding: 40px; }
 }
 @layer responsive {
+  .profile-list-heading { margin-top: 28px; }
+  .local-profile-row { padding: 16px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  .local-profile-row .run-actions { flex-wrap: wrap; }
   @media (min-width: 1600px) { .workbench { grid-template-columns: 360px minmax(0,1fr); } .run-detail { padding: 35px 45px; } .browser-stage { height: 560px; } }
   @media (max-width: 1120px) { .app-header { padding: 0 20px; } .workbench { grid-template-columns: 285px minmax(0,1fr); } .sidebar-heading { padding: 25px 16px; } .new-button { padding: 7px 10px; font-size: 12px; } .run-detail { padding: 24px 20px; } .detail-lower { grid-template-columns: minmax(0,1fr); } .session-panel { border-left: 0; border-top: 1px solid var(--line); } .session-facts { grid-template-columns: auto 1fr auto 1fr; } .artifact-panel { max-width: 100%; } .artifact-panel .button { width: auto; } .connection-status { display: none; } .browser-controls { gap: 8px; } }
   @media (max-width: 800px) { .app-header { height: 64px; padding: 0 16px; } .brand { font-size: 15px; } .brand-mark { width: 30px; height: 30px; font-size: 25px; } .header-actions { gap: 8px; } .engine-button { padding: 7px 8px; } .chevron { display: none; } .workbench { display: block; } .run-sidebar { height: auto; min-height: 0; position: static; border-right: 0; border-bottom: 1px solid var(--line); } .sidebar-heading { padding: 18px 20px; } .sidebar-heading h1 { font-size: 19px; } .list-controls { padding: 12px 20px; flex-wrap: nowrap; } .filter-label { width: 135px; flex-shrink: 0; } .filter-label select { min-height: 37px; } .run-list-panel { max-height: 238px; padding-bottom: 10px; } .run-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .run-row { padding: 12px; } .sidebar-foot { padding: 10px 20px; } .run-detail { padding: 22px 20px; } .selection-empty { min-height: 390px; } .browser-stage { height: 420px; } }
-  @media (max-width: 520px) { .app-header .brand > span:last-child { font-size: 0; } .app-header .brand strong { font-size: 14px; } .header-actions { gap: 2px; } .engine-button { font-size: 10px; } .header-actions > .button { font-size: 10px; padding: 6px 8px; } .run-list { grid-template-columns: minmax(0,1fr); } .run-list-panel { max-height: 194px; } .run-row-top { align-items: start; } .run-row-bottom { margin-top: 6px; } .run-detail { padding: 20px 12px; } .detail-heading { align-items: flex-start; } .detail-title-group h2 { font-size: 21px; } .detail-kicker { gap: 6px; flex-direction: column; } .run-toolbar { align-items: flex-start; } .duration-label { white-space: nowrap; margin-top: 7px; } .browser-toolbar { padding: 9px; flex-wrap: wrap; gap: 9px; } .browser-controls { margin-left: auto; } .browser-label { font-size: 11px; } .browser-controls > .text-button { font-size: 0; } .browser-controls > .text-button::after { content: "Refresh"; font-size: 11px; } .browser-stage { height: 290px; } .browser-foot { flex-direction: column; gap: 2px; padding: 8px 10px; } .activity-panel, .session-panel { padding: 17px 15px; } .session-facts { grid-template-columns: auto minmax(0,1fr); } .drawer-heading { padding: 20px; } .drawer-body { padding: 22px 20px; } .drawer-footer { padding: 16px 20px; } .preset-options { gap: 5px; } .preset-options span { padding: 10px 8px; } .preset-options strong { font-size: 11px; } .preset-options small { font-size: 9px; } .login-screen { padding: 24px; } .login-panel h1 { font-size: 30px; } .login-panel form { padding: 22px; } .login-foot { font-size: 10px; } .challenge-panel { padding: 15px; } .selection-empty { padding: 25px 10px; } .selection-empty h2 { font-size: 22px; } }
+  @media (max-width: 520px) { .app-header { height: auto; padding: 14px 16px; flex-direction: column; align-items: stretch; gap: 14px; } .app-header .brand { gap: 9px; } .app-header .brand-lockup strong { font-size: 18px; } .app-header .maker-credit { margin-left: auto; font-size: 11px; } .app-header .header-actions { justify-content: space-between; } .header-actions { gap: 2px; } .engine-button { font-size: 10px; } .header-actions > .button { font-size: 10px; padding: 6px 8px; } .run-list { grid-template-columns: minmax(0,1fr); } .run-list-panel { max-height: 194px; } .run-row-top { align-items: start; } .run-row-bottom { margin-top: 6px; } .run-detail { padding: 20px 12px; } .detail-heading { align-items: flex-start; } .detail-title-group h2 { font-size: 21px; } .detail-kicker { gap: 6px; flex-direction: column; } .run-toolbar { align-items: flex-start; } .duration-label { white-space: nowrap; margin-top: 7px; } .browser-toolbar { padding: 9px; flex-wrap: wrap; gap: 9px; } .browser-controls { margin-left: auto; } .browser-label { font-size: 11px; } .browser-controls > .text-button { font-size: 0; } .browser-controls > .text-button::after { content: "Refresh"; font-size: 11px; } .browser-stage { height: 290px; } .browser-foot { flex-direction: column; gap: 2px; padding: 8px 10px; } .activity-panel, .session-panel { padding: 17px 15px; } .session-facts { grid-template-columns: auto minmax(0,1fr); } .drawer-heading { padding: 20px; } .drawer-body { padding: 22px 20px; } .drawer-footer { padding: 16px 20px; } .preset-options { gap: 5px; } .preset-options span { padding: 10px 8px; } .preset-options strong { font-size: 11px; } .preset-options small { font-size: 9px; } .login-screen { padding: 24px; } .login-panel h1 { font-size: 30px; } .login-panel form { padding: 22px; } .login-foot { font-size: 10px; } .challenge-panel { padding: 15px; } .selection-empty { padding: 25px 10px; } .selection-empty h2 { font-size: 22px; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+}
+@layer responsive {
+  @media(min-width:601px) and (max-width:1100px){.app-header{height:auto;min-height:72px;padding:12px 16px;align-items:flex-start;flex-wrap:wrap;gap:10px}.header-actions{flex:1;justify-content:flex-end;flex-wrap:wrap;gap:8px}.header-actions .button{white-space:nowrap}.run-sidebar{min-height:350px}}
 }

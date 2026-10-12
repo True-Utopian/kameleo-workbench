@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { FlowLibrary } from '../src/flow-library.js';
+test('flow drafts validate, serialize optimistic edits and publish exact revisions',async()=>{const directory=await mkdtemp(join(tmpdir(),'vesper-flow-library-'));const pack=JSON.parse(await readFile('flows/owned-site.flow.json','utf8')),manifest=JSON.parse(await readFile('flows/owned-site.manifest.json','utf8'));const published:any[]=[];let library=new FlowLibrary(directory,{installFlow:async(p,m)=>{published.push({p,m});return {id:p.id};}});try{const first=await library.save(pack,manifest,0);assert.equal(first.revision,1);const results=await Promise.allSettled([library.save({...pack,title:'First edit'},manifest,1),library.save({...pack,title:'Second edit'},manifest,1)]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);await assert.rejects(library.publish(pack.id,1),/changed/);await library.publish(pack.id,2);assert.equal(published.length,1);assert.equal(published[0].p.title,'First edit');library=new FlowLibrary(directory,{});assert.equal((await library.list()).drafts[0].revision,2);await assert.rejects(library.save({...pack,id:'../bad'},manifest,0),/lowercase flow ID/);await assert.rejects(library.save({...pack,steps:{}},manifest,2),/Invalid flow pack/);}finally{await rm(directory,{recursive:true,force:true});}});
