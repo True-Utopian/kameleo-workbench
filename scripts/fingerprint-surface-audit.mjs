@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 import { observeFingerprintSurfaces, assessFingerprintConsistency } from './lib/fingerprint-observation.mjs';
+import { decodeFixturePng } from '../packages/vesper-browser/src/native-qualification.mjs';
 const args=process.argv.slice(2);
 assert.equal(args.length,2,'Usage: node scripts/fingerprint-surface-audit.mjs --executable <owned browser executable>');assert.equal(args[0],'--executable');
 const executable=await realpath(resolve(args[1])),temporary=await realpath(await mkdtemp(join(tmpdir(),'vesper-surface-audit-')));
@@ -35,6 +36,13 @@ try {
   await browser.close();browser=undefined;
   browser=await puppeteer.launch({executablePath:executable,headless:true,userDataDir:temporary,args:['--disable-background-networking','--disable-component-update','--no-first-run','--no-default-browser-check'],timeout:30000});
   const restarted=(await browser.pages())[0];await restarted.goto(`${origin}/restart`,{waitUntil:'load'});contexts.restart=await restarted.evaluate(()=>window.first);
+  for(const observation of Object.values(contexts))for(const surface of [observation.canvas,observation.webgl?.readout,observation.webgl2?.readout]) {
+    if(!surface)continue;
+    const pixelsHash=bytes=>createHash('sha256').update(Buffer.from(decodeFixturePng(bytes))).digest('hex');
+    if(surface.blobPng)surface.blobPixels=pixelsHash(surface.blobPng);
+    if(surface.dataUrlPng)surface.dataUrlPixels=pixelsHash(Buffer.from(surface.dataUrlPng.split(',')[1],'base64'));
+    delete surface.blobPng;delete surface.dataUrlPng;
+  }
   Object.assign(report,assessFingerprintConsistency(contexts,requests));report.state='observed';report.completedAt=new Date().toISOString();
 }catch(error){report.state='failed';report.errors.push(error.message);process.exitCode=1;}
 finally {await browser?.close();await new Promise(done=>server.close(done));const inside=relative(await realpath(tmpdir()),temporary);assert.ok(inside&&!inside.startsWith('..')&&inside.startsWith('vesper-surface-audit-'));await rm(temporary,{recursive:true,force:true,maxRetries:5,retryDelay:100});const output=resolve('test-results/fingerprint-surfaces');await mkdir(output,{recursive:true});await writeFile(join(output,'observations.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({state:report.state,contexts:Object.keys(contexts),mismatches:report.mismatches?.length??null,errors:report.errors,nativeProof:false}));}
