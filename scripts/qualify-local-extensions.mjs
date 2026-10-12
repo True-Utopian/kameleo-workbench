@@ -49,7 +49,16 @@ try{
   const outsider=new VesperBrowserClient({url:browserUrl,tokenFile:join(directory,'browser','admin-token')});await assert.rejects(outsider.update(running.profileId,{extensions:[]}),error=>error.status===409);
   await runtime.done(runId);const saved=await waitRun(runId,record=>record.state==='saved');const bytes=await readFile(saved.artifact.path);assert.equal(createHash('sha256').update(bytes).digest('hex'),saved.artifact.sha256);
   report.run={state:saved.state,archiveBytes:bytes.length,sha256:saved.artifact.sha256};assert.deepEqual((await client.profileExtensions(saved.profileId)).map(item=>item.id),[extension.id]);
-  assert.ok((await client.listProfiles()).every(profile=>profile.state==='stopped'&&!profile.lease));report.checks.push('Workbench Inspect assigns the extension through the Browser API, prevents lease hijacking and saves a verified archive');report.state='passed';
+  assert.ok((await client.listProfiles()).every(profile=>profile.state==='stopped'&&!profile.lease));report.checks.push('Workbench Inspect assigns the extension through the Browser API, prevents lease hijacking and saves a verified archive');
+  await assert.rejects(client.removeExtension(extension.id),error=>error.status===409);
+  await client.update(saved.profileId,{extensions:[]});
+  const pythonRemoval=`import sys,json\nsys.path.insert(0,sys.argv[1])\nfrom vesper import Browser\nc=Browser(sys.argv[2],sys.argv[3])\nr=c.remove_extension(sys.argv[4])\nassert r['removed'] and r['id']==sys.argv[4]\nassert c.extensions()==[]\np=c.import_extension(sys.argv[5])\nassert p['id']==sys.argv[4]\nc.remove_extension(p['id'])\nprint(json.dumps({'removed':True,'reimportIdentity':True}))`;
+  const removed=await promisify(execFile)(process.env.PYTHON??'python',['-c',pythonRemoval,resolve('sdks/python'),browserUrl,join(directory,'browser','admin-token'),extension.id,zip],{timeout:15000,windowsHide:true});
+  assert.deepEqual(JSON.parse(removed.stdout),{removed:true,reimportIdentity:true});
+  await other.start(imported.id);const independent=await observe(other,imported.id);assert.equal(independent.visits,4);await other.stop(imported.id);
+  await client.update(profile.id,{extensions:[extension.id]});await client.start(profile.id);const retained=await observe(client,profile.id);assert.equal(retained.visits,3);await client.stop(profile.id);
+  assert.deepEqual(await client.extensions(),[]);
+  report.checks.push('Assigned Workbench profiles block catalog removal; Python removal/reimport keeps identity and actual Chromium archive/profile storage survives catalog deletion');report.state='passed';
 }catch(error){report.state='failed';report.errors.push(error.stack??String(error));process.exitCode=1;}
 finally{
   if(runId&&runtime&&!['saved','cancelled'].includes(runtime.get(runId).state))await runtime.cancel(runId).catch(()=>{});
