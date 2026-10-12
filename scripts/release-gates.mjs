@@ -7,7 +7,9 @@ import { createReadStream } from 'node:fs';
 const sha = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const accepted = record => record?.state === 'passed' && Array.isArray(record.errors) && record.errors.length === 0;
 const current = (record, versions) => record?.versions?.browser === versions.browser && record?.versions?.workbench === versions.workbench;
-const native = record => accepted(record) && record.nativeProof === true && record.implementation === 'native-chromium-patches' && sha(record.executableSha256) && ['baseline','seed-a','seed-a-restart','seed-b','invalid-fallback'].every(name => record.cases?.some(value => value.name === name));
+const surfacePolicies = ['webgl-debug-restriction','offline-audio-seed','local-font-discovery'];
+const qualifiedSurfaces = record => surfacePolicies.every(policy => record?.surfacePolicies?.includes(policy));
+const native = record => accepted(record) && record.nativeProof === true && record.implementation === 'native-chromium-patches' && sha(record.executableSha256) && qualifiedSurfaces(record) && ['baseline','seed-a','seed-a-restart','seed-b','invalid-fallback','surface-policy-a','surface-policy-a-restart','surface-policy-b','surface-policy-invalid'].every(name => record.cases?.some(value => value.name === name));
 
 /** Conservative aggregate acceptance; a build, upstream/CDP test or old release cannot satisfy a native/installed gate. */
 export function evaluateReleaseGates(input) {
@@ -32,9 +34,9 @@ export function evaluateReleaseGates(input) {
   const build = !!revision && input.build?.revision === revision && input.build?.customKernelCompiled === true && input.build?.status === 'compiled-awaiting-native-qualification' && sha(executableSha256) && input.currentExecutableSha256 === executableSha256;
   add('native-compilation', build, 'Pinned custom executable must exist and still match its compiled SHA-256');
   add('native-unit-tests', build && input.units?.revision === revision && input.units?.status === 'native-unit-tests-passed' && input.units?.nativeTestExecutions === 26 && input.unitXmlVerified === true, 'All 26 native unit executions must have matching zero-failure XML results');
-  add('direct-native-proof', build && native(input.direct) && input.direct.executableSha256 === executableSha256, 'Direct first-script/worker/client-hint/canvas proof must qualify this custom binary');
+  add('direct-native-proof', build && native(input.direct) && input.direct.executableSha256 === executableSha256, 'Direct scalar/canvas and WebGL/audio/font fixtures, including restart, independent seeds and malformed-input fallback, must qualify this custom binary');
   add('copied-native-runtime', build && input.copied?.revision === revision && input.copied?.executableSha256 === executableSha256 && input.copied?.nativeUnitExecutions === 26 && native(input.copied?.qualification) && input.copied.qualification.executableSha256 === executableSha256 && input.runtimeFilesVerified === true, 'Copied custom runtime and all component/resource hashes must pass independent qualification');
-  add('installed-native-integration', build && accepted(input.integration) && input.integration.nativeProof === true && input.integration.installedKernelChanged === true && input.integration.executableSha256 === executableSha256 && input.integration.run?.state === 'saved', 'Guarded activation and a saved Browser-owned Workbench run must use the exact custom kernel');
+  add('installed-native-integration', build && accepted(input.integration) && qualifiedSurfaces(input.integration) && input.integration.nativeProof === true && input.integration.installedKernelChanged === true && input.integration.executableSha256 === executableSha256 && input.integration.run?.state === 'saved', 'Guarded activation and a saved Browser-owned Workbench run must use the exact custom kernel with all three qualified surface policies');
   add('linux-native-runtime', accepted(input.linux) && current(input.linux, versions) && input.linux.platform === 'linux' && input.linux.installerExecuted === true && input.linux.sandboxVerified === true && input.linux.nativeKernelQualified === true, 'Real Linux install, launch, sandbox and custom-kernel qualification are required; package structure/source CI do not satisfy this gate');
   const publications = ['browser', 'workbench'].map(product => input.publication?.[product]);
   add('public-source-ci', publications.every(record => !!record?.main && record.workflow?.sha === record.main && record.workflow?.status === 'completed' && record.workflow?.conclusion === 'success'), 'Both public main branches must have passing CI at their current recorded commits');
@@ -44,7 +46,7 @@ export function evaluateReleaseGates(input) {
 
 async function hash(file) { const value = createHash('sha256'); for await (const bytes of createReadStream(file)) value.update(bytes); return value.digest('hex'); }
 export async function collectReleaseEvidence(root) {
-  const json = async path => { try { return JSON.parse(await readFile(join(root, path), 'utf8')); } catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return undefined; throw error; } };
+  const json = async path => { try { return JSON.parse((await readFile(join(root, path), 'utf8')).replace(/^\uFEFF/,'')); } catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return undefined; throw error; } };
   const browser = await json('packages/vesper-browser/package.json'), workbench = await json('package.json');
   const input = { versions: { browser: browser?.version, workbench: workbench?.version } };
   for (const [key, path] of Object.entries({ status: 'docs/status.json', packaged: 'test-results/desktop-followup/packaged-pair.json', installed: 'test-results/native-engine/installed-pair-qualification.json', proxies: 'test-results/proxy-inventory/installed-pair.json', ui: 'test-results/desktop-followup/actual-ui.json', python: 'test-results/desktop-followup/installed-python.json', audit: 'test-results/desktop-followup/production-audit.json', kernel: 'native/chromium/kernel.json', build: '.workbench/kernel-toolchain/build-result.json', units: '.workbench/kernel-toolchain/test-result.json', direct: 'test-results/native-kernel/qualification.json', integration: 'test-results/native-kernel/installed-native-integration.json', linux: 'test-results/desktop/linux-runtime-qualification.json', publication: '.workbench/publication-current.json' })) input[key] = await json(path);
@@ -65,7 +67,7 @@ export async function collectReleaseEvidence(root) {
       } catch (error) { if (error.code !== 'ENOENT') throw error; input.unitXmlVerified = false; }
     }
     try {
-      const packageLog = JSON.parse(await readFile(join(root, '.workbench/kernel-toolchain/native-runtime-package.log'), 'utf8'));
+      const packageLog = JSON.parse((await readFile(join(root, '.workbench/kernel-toolchain/native-runtime-package.log'), 'utf8')).replace(/^\uFEFF/,''));
       input.copied = JSON.parse(await readFile(join(packageLog.output, 'vesper-kernel.json'), 'utf8'));
       const { verifyNativeRuntime } = await import(pathToFileURL(join(root, 'packages/vesper-browser/dist/native-kernel.js')).href);
       await verifyNativeRuntime(join(packageLog.output, input.copied.executable), input.copied.runtimeFiles);

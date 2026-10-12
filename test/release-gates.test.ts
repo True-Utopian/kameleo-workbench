@@ -9,11 +9,28 @@ import { createHash } from 'node:crypto';
 const versions = { browser: '0.4.4', workbench: '0.5.6' }, sha = '1'.repeat(64);
 function evidence() {
   const accepted = { state: 'passed', errors: [], versions };
-  const proof = { state: 'passed', errors: [], nativeProof: true, implementation: 'native-chromium-patches', executableSha256: sha, cases: ['baseline','seed-a','seed-a-restart','seed-b','invalid-fallback'].map(name => ({ name })) };
+  const surfacePolicies = ['webgl-debug-restriction','offline-audio-seed','local-font-discovery'];
+  const proof = { state: 'passed', errors: [], nativeProof: true, implementation: 'native-chromium-patches', executableSha256: sha, surfacePolicies, cases: ['baseline','seed-a','seed-a-restart','seed-b','invalid-fallback','surface-policy-a','surface-policy-a-restart','surface-policy-b','surface-policy-invalid'].map(name => ({ name })) };
   const publicCommit = { main: 'commit', workflow: { sha: 'commit', status: 'completed', conclusion: 'success' } };
-  return { versions, status: { groups: [{ checks: [{ id: 'owned-feature', state: 'verified' }] }] }, source: { suites: 2, passed: 151, failed: 0 }, packaged: accepted, installed: accepted, proxies: { ...accepted, actualInstalledProof: true, proxyRequests: 1, run: { state: 'saved', sha256: sha, archiveBytes: 65000 } }, ui: { state: 'passed', versions, originalMothIconVisible: true, nativeEmbeddedWorkbench: true }, python: { state: 'passed', version: versions.workbench, calendarDSTPreview: true, futureScheduleCreatedPausedRemoved: true }, audit: { metadata: { vulnerabilities: { total: 0 } } }, kernel: { revision: 'pinned' }, build: { revision: 'pinned', customKernelCompiled: true, status: 'compiled-awaiting-native-qualification', executableSha256: sha }, currentExecutableSha256: sha, units: { revision: 'pinned', status: 'native-unit-tests-passed', nativeTestExecutions: 26 }, unitXmlVerified: true, direct: proof, copied: { revision: 'pinned', executableSha256: sha, nativeUnitExecutions: 26, qualification: proof }, runtimeFilesVerified: true, integration: { ...accepted, nativeProof: true, installedKernelChanged: true, executableSha256: sha, run: { state: 'saved' } }, linux: { ...accepted, platform: 'linux', installerExecuted: true, sandboxVerified: true, nativeKernelQualified: true }, publication: { browser: publicCommit, workbench: publicCommit } };
+  return { versions, status: { groups: [{ checks: [{ id: 'owned-feature', state: 'verified' }] }] }, source: { suites: 2, passed: 151, failed: 0 }, packaged: accepted, installed: accepted, proxies: { ...accepted, actualInstalledProof: true, proxyRequests: 1, run: { state: 'saved', sha256: sha, archiveBytes: 65000 } }, ui: { state: 'passed', versions, originalMothIconVisible: true, nativeEmbeddedWorkbench: true }, python: { state: 'passed', version: versions.workbench, calendarDSTPreview: true, futureScheduleCreatedPausedRemoved: true }, audit: { metadata: { vulnerabilities: { total: 0 } } }, kernel: { revision: 'pinned' }, build: { revision: 'pinned', customKernelCompiled: true, status: 'compiled-awaiting-native-qualification', executableSha256: sha }, currentExecutableSha256: sha, units: { revision: 'pinned', status: 'native-unit-tests-passed', nativeTestExecutions: 26 }, unitXmlVerified: true, direct: proof, copied: { revision: 'pinned', executableSha256: sha, nativeUnitExecutions: 26, qualification: proof }, runtimeFilesVerified: true, integration: { ...accepted, surfacePolicies, nativeProof: true, installedKernelChanged: true, executableSha256: sha, run: { state: 'saved' } }, linux: { ...accepted, platform: 'linux', installerExecuted: true, sandboxVerified: true, nativeKernelQualified: true }, publication: { browser: publicCommit, workbench: publicCommit } };
 }
 const pending = (result: any, id: string) => assert.equal(result.gates.find((gate: any) => gate.id === id).state, 'pending');
+
+test('legacy scalar/canvas receipts cannot qualify the new native surface release', () => {
+  const proof = evidence().direct;
+  for (const invalid of [
+    { ...proof, surfacePolicies: [] },
+    ...proof.surfacePolicies.map(missing => ({ ...proof, surfacePolicies: proof.surfacePolicies.filter(policy => policy !== missing) })),
+    ...proof.cases.filter(record => record.name.startsWith('surface-policy')).map(missing => ({ ...proof, cases: proof.cases.filter(record => record.name !== missing.name) })),
+  ]) {
+    const input = evidence(); input.direct = invalid; input.copied.qualification = invalid;
+    const result = evaluateReleaseGates(input);
+    assert.equal(result.productComplete, false);
+    pending(result, 'direct-native-proof'); pending(result, 'copied-native-runtime');
+  }
+  const input = evidence(); input.integration.surfacePolicies = ['offline-audio-seed'];
+  pending(evaluateReleaseGates(input), 'installed-native-integration');
+});
 
 test('installed proxy acceptance requires current installed routing and a saved verified archive', () => {
   const proxyProof = evidence().proxies;
@@ -47,7 +64,7 @@ test('evidence collection verifies the executable and rejects stale or failed na
     const bytes = 'owned non-browser audit fixture', executable = join(root,'owned.exe'); await writeFile(executable,bytes);
     await save('package.json',{version:versions.workbench}); await save('packages/vesper-browser/package.json',{version:versions.browser});
     await save('test-results/proxy-inventory/installed-pair.json',evidence().proxies);
-    await save('.workbench/kernel-toolchain/build-result.json',{...evidence().build,executable,executableSha256:createHash('sha256').update(bytes).digest('hex')});
+    await save('.workbench/kernel-toolchain/build-result.json','\uFEFF'+JSON.stringify({...evidence().build,executable,executableSha256:createHash('sha256').update(bytes).digest('hex')}));
     await save('.workbench/kernel-toolchain/test-result.json',{...evidence().units,at:new Date().toISOString()});
     for (const [name,count] of [['upstream-memory-regression',1],['scalars-default',8],['scalars-policy',8],['canvas',9]]) await save(`.workbench/kernel-toolchain/${name}.xml`,`<testsuites tests="${count}" failures="0" disabled="0" errors="0"></testsuites>`);
     const initial = await collectReleaseEvidence(root); assert.equal(initial.unitXmlVerified,true); assert.equal(initial.currentExecutableSha256,initial.build.executableSha256); assert.equal(initial.runtimeFilesVerified,false); assert.deepEqual(initial.proxies,evidence().proxies);

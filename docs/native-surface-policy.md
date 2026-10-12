@@ -10,11 +10,12 @@ Vesper Browser 0.4.6 and Workbench 0.5.8 expose three optional native privacy co
 
 ## Passing checks
 
-- Full source suite: 177 passing tests (38 Browser, 139 Workbench/root), zero failures and one optional external PostgreSQL test skipped.
+- Full source suite: 178 passing tests (38 Browser, 140 Workbench/root), zero failures and one optional external PostgreSQL test skipped.
 - Standalone native C++ policy: 4,141 assertions pass. These cover sample stability, independent seeds/channels, chunk offsets, special floats, bounded changes and font-family parsing; they are not 4,141 browser features.
 - Four modified Chromium translation units compile in isolation with the pinned native toolchain: WebGL extension discovery, offline audio completion, font cache and Local Font Access.
 - Browser API tests check policy validation, persisted identity, restart/archive behavior and rejection without the required native receipt. Workbench's Inspect schema and profile mapping forward the same settings.
 - The expanded first-script fixture runs on the bundled stock browser across eight contexts. Native admission correctly rejects that stock browser. This proves fixture execution, not native masking.
+- Browser 0.4.6 and the signed Workbench 0.5.8 add-on passed 22 packaged Windows checks: six desktop/control checks, nine extended API checks and seven saved-proxy checks. This includes saving the three native settings and refusing an unqualified kernel. The production dependency audit recorded zero vulnerabilities.
 
 ## Pending release checks
 
@@ -22,4 +23,4 @@ The full native browser is still compiling. The surface patch is queued behind t
 
 Native acceptance requires unit tests, direct runtime checks, copied-runtime checks and installed Browser–Workbench integration. The runtime checks compare WebGL discovery/error behavior, offline sample reads/copies/events/restarts and independent seeds, and font metrics/local discovery against an upstream baseline. Each receipt must name the specific passing surface policies before those settings can launch.
 
-The new desktop packages and installed controls remain pending until their own qualification reports pass. Linux package structure does not prove execution on Linux. No complete vendor masking parity or detection-avoidance claim is made.
+The actual installed upgrade and its controls remain pending until their own qualification reports pass. The release audit now requires all nine native fixture cases and the three surface capabilities in direct and copied receipts, plus those capabilities in installed integration; an older scalar/canvas receipt cannot complete these gates. PowerShell UTF-8 receipts with a byte-order mark are accepted without ignoring their recorded state. Linux package structure does not prove execution on Linux. No complete vendor masking parity or detection-avoidance claim is made.
