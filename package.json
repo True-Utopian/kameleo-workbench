@@ -10,7 +10,7 @@
     "url": "https://github.com/True-Utopian/vesper-workbench.git"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -32,7 +32,7 @@
     "start": "node --env-file-if-exists=.env dist/cli.js serve",
     "dev": "npm run build --workspace @true-utopian/vesper-browser && tsx --env-file-if-exists=.env src/cli.ts serve",
     "typecheck": "npm run build --workspace @true-utopian/vesper-browser && tsc -p tsconfig.json --noEmit",
-    "test": "npm run build --workspace @true-utopian/vesper-browser && npm test --workspace @true-utopian/vesper-browser && tsx --test test/*.test.ts",
+    "test": "npm run build --workspace @true-utopian/vesper-browser && npm test --workspace @true-utopian/vesper-browser && tsx --test --test-concurrency=2 test/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "smoke": "node --env-file-if-exists=.env scripts/smoke.mjs",
     "smoke:proxy": "node --env-file-if-exists=.env scripts/proxy-smoke.mjs",

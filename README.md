@@ -59,7 +59,7 @@ The HTTP interface has one administrator token. Managed coordination scopes reco
 
 ## Start locally
 
-Use Node.js 24 or newer. Install free Chromium once, then start the local workbench:
+Use Node.js 26 or newer for the Workbench CLI and source build. Desktop installers include their own tested runtime. Install free Chromium once, then start the local workbench:
 
 ```sh
 npm ci
