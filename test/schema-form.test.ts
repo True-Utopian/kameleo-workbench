@@ -9,8 +9,16 @@ import { join } from 'node:path';
 import { prepareAssets } from '../src/assets.js';
 
 test('Inspect conditional native-policy rules retain ordinary form controls', async () => {
-  // Read the real automation with its normal definition helper.
-  const { default: inspect } = await import('../automations/inspect.mjs');
+  // A clean source checkout has not emitted Workbench dist before its tests.
+  const previousSdk = process.env.VESPER_SDK_MODULE;
+  let inspect;
+  try {
+    process.env.VESPER_SDK_MODULE = new URL('../src/automation.ts', import.meta.url).href;
+    inspect = (await import('../automations/inspect.mjs')).default;
+  } finally {
+    if (previousSdk === undefined) delete process.env.VESPER_SDK_MODULE;
+    else process.env.VESPER_SDK_MODULE = previousSdk;
+  }
   assert.ok(inspect.inputSchema.allOf);
   assert.equal(schemaHasComplexRoot(inspect.inputSchema), false);
   assert.ok(['webgl', 'audio', 'fonts'].every(key => inspect.inputSchema.properties[key].enum.length === 2));
