@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import base64
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlsplit, quote
 from urllib.request import Request, build_opener, HTTPRedirectHandler
@@ -124,6 +125,11 @@ class Browser(Client):
 
     def extensions(self):
         return self.request("/extensions")
+
+    def remove_extension(self, package_id):
+        if not isinstance(package_id, str) or not re.fullmatch(r"[a-f0-9]{64}", package_id):
+            raise ValueError("Invalid extension package ID")
+        return self.request("/extensions/" + package_id, "DELETE")
 
     def profile_extensions(self, profile_id):
         return self.request(self._path(profile_id, "extensions"), headers=self._lease(profile_id))
