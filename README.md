@@ -1,8 +1,8 @@
-# Vesper
+# Vesper Workbench
 
-![Vesper Browser and Workbench by true-utopian](docs/assets/vesper-banner.svg)
+<p align="center"><img src="public/vesper-icon.png" width="100" alt="Vesper moth emblem"></p>
 
-**Vesper Browser** keeps independent browser profiles on your PC. **Vesper Workbench** adds repeatable automation, visual flows, schedules and verified profile archives. Install Workbench as an optional plug-in inside Browser, or use its standalone app. Both are original open-source projects by **true-utopian**.
+[**Vesper Browser**](https://github.com/True-Utopian/vesper-antidetect-browser) keeps independent browser profiles on your PC. **Vesper Workbench** adds repeatable automation, visual flows, schedules and verified profile archives. Install Workbench as an optional plug-in inside Browser, or use its standalone app. Both are original open-source projects by **true-utopian**.
 
 [Get started](#start-locally) · [Desktop setup](docs/desktop.md) · [API reference](docs/api.md) · [Workbench plug-in](docs/workbench-addon.md)
 

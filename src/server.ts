@@ -1,3 +1,4 @@
+import { vesperWorkbenchVersion } from './version.js';
 import Fastify, { type FastifyRequest } from 'fastify';
 import cookie from '@fastify/cookie';
 import staticFiles from '@fastify/static';
@@ -93,7 +94,7 @@ export async function createServer(config: Config, runtime: WorkbenchRuntime, pr
     reply.code(status >= 400 && status <= 599 ? status : 500).send({ error: status < 500 && error instanceof Error ? error.message : 'The operation failed. Check the run state or engine availability.' });
   });
   app.get('/healthz', async () => ({ ok: true }));
-  app.get('/api/capabilities', async () => ({ product: 'Vesper Workbench', author: 'true-utopian', version: '0.5.4', apiVersion: '1.0', capabilities: { scripts: true, schedules:true, calendarSchedules:{cronFields:5,timezones:true,preview:true,missedRuns:"coalesce"}, scheduleRecovery:'quarantine-uncertain-admission', flowEditor:!!runtime.installFlow, immutablePublishedRuns:true, flows: !!(config.databaseUrl || config.localCoordinator), localCoordinator: !!config.localCoordinator, idempotentAdmission: true, runControls: true, evidence: true, screenshots: true, archives: true, events: 'sse', browserService: !!config.vesperBrowserUrl } }));
+  app.get('/api/capabilities', async () => ({ product: 'Vesper Workbench', author: 'true-utopian', version: vesperWorkbenchVersion, apiVersion: '1.0', capabilities: { scripts: true, schedules:true, calendarSchedules:{cronFields:5,timezones:true,preview:true,missedRuns:"coalesce"}, scheduleRecovery:'quarantine-uncertain-admission', flowEditor:!!runtime.installFlow, immutablePublishedRuns:true, flows: !!(config.databaseUrl || config.localCoordinator), localCoordinator: !!config.localCoordinator, idempotentAdmission: true, runControls: true, evidence: true, screenshots: true, archives: true, events: 'sse', browserService: !!config.vesperBrowserUrl } }));
   app.get('/api/openapi.json', async () => app.swagger());
   app.get('/api/schedules', async () => scheduler.list());
   app.post<{ Body: Record<string, unknown> }>('/api/schedules', { schema: { body: { type: 'object', required: ['name','automationId','inputs'], additionalProperties: false, properties: { name: { type: 'string', minLength: 1, maxLength: 120 }, automationId: { type: 'string' }, inputs: { type: 'object' }, nextAt: { type: 'integer', minimum: 0 }, intervalMs: { type: 'integer', minimum: 60000, maximum: 31536000000 },cron:{type:'string',minLength:1,maxLength:160},timezone:{type:'string',minLength:1,maxLength:120} } } } }, request => scheduler.create(request.body));

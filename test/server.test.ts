@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createServer } from '../src/server.js';
@@ -75,6 +75,8 @@ test('versioned Workbench API documents routes and replays run admission without
   const f = await fixture(), headers = { authorization: `Bearer ${token}`, 'idempotency-key': 'owned-admission-key-001' };
   try {
     assert.equal((await f.app.inject({ url: '/api/v1/capabilities', headers })).json().apiVersion, '1.0');
+    const metadata = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    assert.equal((await f.app.inject({ url: '/api/v1/capabilities', headers })).json().version, metadata.version);
     const spec = (await f.app.inject({ url: '/api/v1/openapi.json', headers })).json();
     assert.ok(spec.paths['/api/v1/runs']); assert.ok(spec.paths['/api/v1/runs/{id}/cancel']);
     for (let i = 0; i < 3; i++) assert.equal((await f.app.inject({ method: 'POST', url: '/api/v1/runs', headers, payload: { automationId: 'fixture', inputs: {} } })).statusCode, 202);

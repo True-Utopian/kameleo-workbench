@@ -1,6 +1,6 @@
 {
   "name": "@true-utopian/vesper-browser",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Vesper Browser by true-utopian: independent local Chromium profiles and proxy routing.",
   "author": "true-utopian",
   "type": "module",
@@ -47,5 +47,9 @@
     "@types/yauzl": "3.4.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/True-Utopian/vesper-antidetect-browser.git"
   }
 }
