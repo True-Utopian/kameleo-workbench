@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import Ajv from 'ajv';
-import inspect from '../automations/inspect.mjs';
 import {validateFingerprint} from '@true-utopian/vesper-browser';
+
+// Exercise the real automation using its supported SDK module override. A clean
+// source test checkout has not emitted the Workbench dist tree yet.
+const previousSdk=process.env.VESPER_SDK_MODULE;
+let inspect;
+try {
+  process.env.VESPER_SDK_MODULE=new URL('../src/automation.ts',import.meta.url).href;
+  inspect=(await import('../automations/inspect.mjs')).default;
+} finally {
+  if(previousSdk===undefined)delete process.env.VESPER_SDK_MODULE;
+  else process.env.VESPER_SDK_MODULE=previousSdk;
+}
 
 test('Workbench inspect forwards qualified native controls and rejects incompatible input combinations',()=>{
   const validate=new Ajv({strict:false}).compile(inspect.inputSchema);
