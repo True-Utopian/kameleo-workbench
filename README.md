@@ -18,6 +18,8 @@ The desktop Browser/Workbench pair runs real Chromium and shares one Browser-own
 
 See the [completion checklist](docs/research/completion-gates.md), [research ledger](docs/research/feature-ledger.md) and [measured validation](docs/validation.md). Windows installers, offline signed updates and a signed Workbench plug-in are built locally. Linux packages are cross-built and require real Linux runtime testing.
 
+End users install compiled browser files. The current full Windows Browser installer is approximately 264 MB; the large Chromium source checkout is only for developers building the native kernel. [Kernel build and qualification](native/chromium/README.md).
+
 ## Two tools, one workspace
 
 Browser provides persistent profiles, HTTP/SOCKS5 proxy credentials, folders, favorites, tags, notes, templates, reversible trash, cookie tools and independent archives. Workbench runs trusted scripts or managed flows, keeps durable run state and saves a checksum-verified profile after completion. Local Chromium is the default and requires no vendor account or subscription; proxies are optional for local fixtures. An optional licensed Kameleo compatibility adapter remains available.
