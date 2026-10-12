@@ -1,3 +1,5 @@
+import { schemaHasComplexRoot } from './schema-form.js';
+
 const $ = (id) => document.getElementById(id);
 const ACTIVE = new Set(['running', 'paused', 'awaiting_input']);
 const IN_PROGRESS = new Set(['queued', 'starting', 'running', 'paused', 'awaiting_input', 'saving']);
@@ -333,7 +335,6 @@ function renderActivity(run) {
 
 function normalizedSchema(schema) { return schema && typeof schema === 'object' ? schema : { type: 'object', properties: {} }; }
 function secretField(name, field) { return field.writeOnly === true || field.format === 'password' || field['x-secret'] === true || /password|passphrase|token|secret|otp|verification.?code/i.test(name); }
-function schemaHasComplexRoot(schema) { return Boolean(schema.oneOf || schema.anyOf || schema.allOf || (schema.type && schema.type !== 'object')); }
 function buildFields(container, rawSchema, prefix) {
   container.replaceChildren(); const schema = normalizedSchema(rawSchema); const required = new Set(schema.required || []);
   const properties = schema.properties || {};
