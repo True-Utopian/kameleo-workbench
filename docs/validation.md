@@ -363,6 +363,8 @@ The packaged editor rejected an out-of-range port, kept saved credentials blank 
 
 These are packaged acceptance results. The guarded actual-installed upgrade and its independent qualification are still pending. The proxy inventory check remains **source tested**; native kernel and Linux execution gates remain pending. Private evidence stays in `test-results/desktop-followup/packaged-pair.json`, `desktop-045-packaged-ui.json`, `test-results/proxy-inventory/packaged-pair.json`, and the local release manifest. Installers, credentials and private runtime reports are not published.
 
+The release auditor also requires a separate `actual-installed-proxies` gate. It reads the installed desktop proxy report, requires matching Browser and Workbench versions, actual-installed proof, observed proxy traffic and a saved archive with a valid checksum. Packaged evidence, missing reports, stale releases, failed preservation, absent traffic and unfinished or unverified archives cannot satisfy it. All five release-audit regression tests pass locally; this addition does not promote the proxy inventory or native kernel status.
+
 ## Source proxy inventory qualification — 12 October 2026
 
 The reusable Browser connection manager is implemented and source tested; it is not in the installed 0.4.4 / 0.5.6 desktop release. The source suite passed **158 tests** (29 Browser and 129 Workbench/root), with one optional external PostgreSQL skip. Full-suite testing caught and corrected a catalog queue-order regression: saved-proxy creation now preserves extension assignment/removal ordering under one catalog queue.
