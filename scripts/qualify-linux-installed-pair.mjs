@@ -4,6 +4,7 @@ import {join,resolve,relative,dirname} from 'node:path';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {createServer} from 'node:net';
+import * as tar from 'tar';
 import {_electron} from 'playwright';
 import puppeteer from 'puppeteer-core';
 import {VesperBrowserClient} from '../packages/vesper-browser/dist/client.js';
@@ -25,12 +26,14 @@ async function quit(){if(!app)return;const owner=app;const closed=owner.waitForE
 async function launch(executable,debugPort){const env={...process.env,VESPER_DESKTOP_DATA_DIR:data,VESPER_BROWSER_HEADLESS:'false'};for(const name of ['ELECTRON_RUN_AS_NODE','VESPER_BROWSER_EXECUTABLE','VESPER_BUNDLED_KERNEL_MANIFEST'])delete env[name];app=await _electron.launch({executablePath:executable,env,args:['--remote-debugging-port='+debugPort,'--remote-debugging-address=127.0.0.1'],timeout:120000});const page=await app.firstWindow();page.on('pageerror',error=>report.errors.push(error.message));await page.waitForSelector('#workspace:not([hidden])',{timeout:120000});return page;}
 try{
  for(const [product,version] of Object.entries(versions)){
-  const source=await realpath(resolve(`release/${product}/linux/linux-unpacked`));const child=relative(await realpath(resolve('release')),source);assert.ok(child&&!child.startsWith('..'));
+  const archive=await realpath(resolve(`release/${product}/linux/Vesper-${product}-${version}-linux-x64.tar.gz`));const child=relative(await realpath(resolve('release')),archive);assert.ok(child&&!child.startsWith('..'));
+  const expected=(await readFile(resolve(`release/${product}/linux/SHA256SUMS`),'utf8')).split(/\r?\n/).find(line=>line.slice(66)===`Vesper-${product}-${version}-linux-x64.tar.gz`);assert.ok(expected);assert.equal(await nativeExecutableHash(archive),expected.slice(0,64));
+  const source=join(qa,'extracted-'+product);await mkdir(source);await tar.x({file:archive,cwd:source,strict:true,preservePaths:false});
   await promisify(execFile)('sh',[join(source,'install.sh'),'--prefix',prefix,'--no-launcher'],{timeout:120000});
   const executable=join(prefix,product,version,`vesper-${product}`);assert.ok((await stat(executable)).mode&0o111);
   const manifest=await json(join(prefix,product,version,'resources/vesper-kernel/vesper-kernel.json'));assert.equal(manifest.qualification.state,'passed');assert.equal(manifest.qualification.nativeProof,true);await verifyNativeRuntime(join(prefix,product,version,'resources/vesper-kernel/chrome'),manifest.runtimeFiles);
  }
- report.installerExecuted=true;report.checks.push('Both real portable installers execute into new version directories and their installed native runtimes retain matching component hashes');
+ report.installerExecuted=true;report.checks.push('Both checksum-matching release tar archives extract with executable launchers; their real portable installers execute into new version directories and retain native component hashes');
  const reserve=createServer();await new Promise(done=>reserve.listen(0,'127.0.0.1',done));const debugPort=reserve.address().port;await new Promise(done=>reserve.close(done));
  const executable=join(prefix,'browser',versions.browser,'vesper-browser'),manifestPath=join(prefix,'browser',versions.browser,'resources/vesper-kernel/vesper-kernel.json');let page=await launch(executable,debugPort);browserApi=await service('browser');assert.equal((await browserApi.api('/capabilities')).version,versions.browser);
  const key=await readFile('desktop/update-public-key.pem','utf8');for(const [product,version] of Object.entries(versions))await update.verifyLocalUpdate(resolve(`release/${product}/linux/vesper-${product}_${version}_amd64.deb.vesper-update.json`),key,{product,platform:'linux',arch:'x64',version:'0.0.0'});
