@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import update from '../desktop/update-contract.cjs';
 import plugin from '../desktop/plugin-contract.cjs';
+import { hashPrivateInventory, validateResumeBackup } from './upgrade-inventory.mjs';
 
 // Default is a read-only preflight. --apply performs the reviewed real upgrade;
 // it never force-closes processes, alters test installation registry locations,
@@ -17,7 +18,7 @@ const args = process.argv.slice(2), options = {};
 for (let index = 0; index < args.length; index++) {
   const name = args[index];
   if (name === '--apply' || name === '--no-launch' || name === '--addon-only') options[name.slice(2)] = true;
-  else if (['--data-root', '--browser-install-root', '--workbench-install-root', '--release-root', '--addon-manifest', '--release-record'].includes(name) && args[index + 1] && !args[index + 1].startsWith('--')) options[name.slice(2)] = args[++index];
+  else if (['--data-root', '--browser-install-root', '--workbench-install-root', '--release-root', '--addon-manifest', '--release-record', '--resume-backup'].includes(name) && args[index + 1] && !args[index + 1].startsWith('--')) options[name.slice(2)] = args[++index];
   else throw new Error(`Unknown or incomplete upgrade argument: ${name}`);
 }
 if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('This local upgrade helper requires Windows x64');
@@ -32,6 +33,7 @@ const report = { mode: options.apply ? 'apply' : 'dry-run', actualInstallationCh
 if (options['addon-only']) assert.ok(options['addon-manifest'] && !workbenchRoot, 'Add-on-only upgrades require an explicit signed manifest and do not install standalone apps');
 else assert.ok(!options['addon-manifest'], 'An explicit add-on manifest requires --addon-only');
 const progress = message => process.stderr.write(`[${new Date().toISOString()}] ${message}\n`);
+assert.ok(!options['resume-backup'] || options.apply, 'Resume a backup only during an explicit apply operation');
 
 async function optionalJson(file) { try { const metadata = await lstat(file); assert.ok(metadata.isFile() && !metadata.isSymbolicLink() && metadata.size < 1024 * 1024, 'Unsafe or oversized state metadata'); return JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code === 'ENOENT') return undefined; throw error; } }
 function alive(pid) { assert.ok(Number.isSafeInteger(pid) && pid > 0, 'Invalid persisted process ID'); try { process.kill(pid, 0); return true; } catch (error) { if (error.code === 'ESRCH') return false; throw error; } }
@@ -60,7 +62,7 @@ async function files(root, relativeRoot = '') {
   }
   return values.sort((a, b) => a.path.localeCompare(b.path));
 }
-async function inventory(root) { const list = await files(root); for (const file of list) file.sha256 = await update.hashFile(join(root, file.path)); return list; }
+async function inventory(root) { return hashPrivateInventory(root, await files(root)); }
 async function processesStopped() {
   const command = "@(Get-CimInstance Win32_Process | Where-Object {$_.Name -match '^vesper-(browser|workbench)\\.exe$'} | Select-Object ProcessId,Name) | ConvertTo-Json -Compress";
   const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, maxBuffer: 1024 * 1024 });
@@ -150,11 +152,16 @@ if (!options.apply) {
     await guards();
     progress('Inventorying private files before the backup.');
     const before = await inventory(data);
-    const backup = join(dirname(data), 'vesper-upgrade-backups', `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`);
+    const backup = options['resume-backup'] ? await validateResumeBackup(data, resolve(options['resume-backup'])) : join(dirname(data), 'vesper-upgrade-backups', `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`);
     inside(dirname(data), backup); assert.ok(!backup.startsWith(data + sep));
-    await mkdir(backup, { recursive: true, mode: 0o700 });
-    progress(`Copying private backup: ${before.length} files, ${before.reduce((sum, file) => sum + file.bytes, 0)} bytes.`);
-    await cp(data, join(backup, 'data'), { recursive: true, dereference: false, errorOnExist: true, force: false });
+    if (options['resume-backup']) {
+      report.backupReused = true;
+      progress('Rechecking the complete interrupted backup against every current source file; no checksum gate is skipped.');
+    } else {
+      await mkdir(backup, { recursive: true, mode: 0o700 });
+      progress(`Copying private backup: ${before.length} files, ${before.reduce((sum, file) => sum + file.bytes, 0)} bytes.`);
+      await cp(data, join(backup, 'data'), { recursive: true, dereference: false, errorOnExist: true, force: false });
+    }
     progress('Verifying backup checksums.');
     assert.deepEqual(await inventory(join(backup, 'data')), before, 'Private backup checksum verification failed');
     await writeFile(join(backup, 'backup-manifest.json'), JSON.stringify({ createdAt: new Date().toISOString(), source: data, files: before }, null, 2), { mode: 0o600 });
@@ -179,7 +186,8 @@ if (!options.apply) {
     registry.enabled = installed?.enabled ?? false;
     const pending = registryPath + '.' + randomUUID(); await writeFile(pending, JSON.stringify(registry), { flag: 'wx', mode: 0o600 }); await rename(pending, registryPath);
     progress('Verifying preserved original private file checksums.');
-    for (const file of before) if (file.path !== join('plugins', 'workbench', 'installed.json')) assert.equal(await update.hashFile(join(data, file.path)), file.sha256, 'An original private file changed unexpectedly');
+    const preserved = before.filter(file => file.path !== join('plugins', 'workbench', 'installed.json'));
+    assert.deepEqual(await hashPrivateInventory(data, preserved), preserved, 'An original private file changed unexpectedly');
     assert.equal((await plugin.readInstalled(data)).version, addon.version);
     report.checks.push('Backup verified', ...(browserUpdate ? ['Installed signed Browser version verified'] : []), 'Atomic signed add-on version verified', 'Original private data checksums preserved');
     await writeFile(join(backup, 'upgrade-result.json'), JSON.stringify(report, null, 2), { mode: 0o600 });

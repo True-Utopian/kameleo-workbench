@@ -14,11 +14,11 @@
 
 <sub>* Percentages count desktop-verified checks in the [documented inventory](docs/status.md), which grows as requirements become known. Green means accepted; grey means acceptance is pending. Grid squares visualize these proportions, not extra checks. Source-tested, active and planned work are distinguished in the linked checklist. These are not percentages of vendor parity, engineering effort or detection resistance.</sub>
 
-The desktop Browser/Workbench pair runs real Chromium and shares one Browser-owned profile store through an authenticated API. The extension catalog, portable extension profiles, timezone-aware calendar schedules and native-kernel host integration are implemented. The original Chromium kernel is compiling; it has not passed native qualification or activation. WebGL/WebGPU, audio, fonts, media-device modeling, coherent persona generation, Firefox/mobile engines and native Linux qualification remain unfinished.
+The installed Windows Browser 0.4.7 / Workbench 0.5.9 pair runs real Chromium and shares one Browser-owned profile store through an authenticated API. The extension catalog, portable extension profiles, timezone-aware calendar schedules and native-kernel host integration are implemented. The original Windows kernel passed 26 native unit executions, nine direct and nine copied-runtime cases, installed Browser–Workbench integration and persisted identity checks. Broader WebGL/WebGPU, realtime audio, coherent font packs, media-device modeling, coherent personas, Firefox/mobile engines and native Linux qualification remain unfinished. [Native qualification and its limits](docs/native-kernel-qualification.md).
 
 See the [completion checklist](docs/research/completion-gates.md), [research ledger](docs/research/feature-ledger.md) and [measured validation](docs/validation.md). Windows installers, offline signed updates and a signed Workbench plug-in are built locally. Linux packages are cross-built and require real Linux runtime testing.
 
-End users install compiled browser files. The current full Windows Browser installer is approximately 264 MB; the large Chromium source checkout is only for developers building the native kernel. [Kernel build and qualification](native/chromium/README.md).
+End users install compiled browser files. The new local Windows Browser installer with the qualified Vesper runtime is approximately 668 MB; its guarded installed upgrade and native/form checks passed. The large Chromium source checkout is only for developers building the native kernel. [Kernel build and qualification](native/chromium/README.md).
 
 ## Two tools, one workspace
 
