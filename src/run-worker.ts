@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer-core';
 import { pathToFileURL } from 'node:url';
 import { createActions, type PacePreset } from './actions.js';
 import type { Automation, JsonSchema } from './automation.js';
+import { withBrowserConnection } from './browser-lifecycle.js';
 
 interface Start { type: 'start'; automationPath: string; browserWSEndpoint: string; inputs: Record<string, unknown>; preset: PacePreset }
 const requests = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
@@ -29,15 +30,20 @@ async function run(message: Start) {
     const loaded = await import(pathToFileURL(message.automationPath).href);
     const automation = (loaded.default ?? loaded.automation) as Automation;
     browser = await puppeteer.connect({ browserWSEndpoint: message.browserWSEndpoint, defaultViewport: null });
+    const connectedBrowser = browser;
     const pages = await browser.pages(); const page = pages[0] ?? await browser.newPage();
     const checkpoint = async () => { abort.signal.throwIfAborted(); await request('checkpoint'); abort.signal.throwIfAborted(); };
     const done = async (): Promise<never> => { throw new Finished(); };
-    await automation.run({
-      inputs: message.inputs, browser, page, signal: abort.signal,
+    await withBrowserConnection(connectedBrowser, () => automation.run({
+      inputs: message.inputs, browser: connectedBrowser, page, signal: abort.signal,
       actions: createActions(page, { preset: message.preset, signal: abort.signal, checkpoint }), checkpoint,
       log: message => { process.send?.({ type: 'log', message: String(message) }); },
       requestInput: async (title: string, fields: JsonSchema) => await request('input', { title, fields }) as Record<string, unknown>,
       done, waitForFinish: async () => { await request('wait_finish'); return done(); },
+    }), () => {
+      abort.abort(new Error('Browser disconnected'));
+      for (const pending of requests.values()) pending.reject(new Error('Browser disconnected'));
+      requests.clear();
     });
     process.send?.({ type: 'failure', message: 'Automation returned without calling done() or waitForFinish().' });
   } catch (error) {
