@@ -9,6 +9,8 @@ const root=resolve(import.meta.dirname,'..'),metadata=JSON.parse(await readFile(
 const platform=process.argv[2]||process.platform;
 if(!['win32','linux'].includes(platform))throw new Error('Build the Workbench desktop payload for Windows or Linux first');
 const source=join(root,'.desktop-build/workbench',platform,'payload'),stage=join(root,'.desktop-build/workbench-plugin',platform),output=join(root,'release/addons');
+const payloadMetadata=JSON.parse(await readFile(join(source,'package.json'),'utf8'));
+if(payloadMetadata.name!=='@true-utopian/vesper-workbench'||payloadMetadata.version!==metadata.version)throw new Error('Rebuild the Workbench desktop payload for the current version before packaging its add-on');
 await stat(join(source,'dist/cli.js'));await stat(join(source,'node_modules/@electric-sql/pglite/package.json'));
 // This payload has no browser executable and shares Browser's profile owner.
 // Keep platform-native modules out of a package advertised for both platforms.

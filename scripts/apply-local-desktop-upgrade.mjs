@@ -134,7 +134,7 @@ const workbenchVersion = workbenchRoot ? JSON.parse(await asarText(workbenchRoot
 const workbenchUpdate = options['addon-only'] ? undefined : await update.verifyLocalUpdate(join(release, `workbench/win32/Vesper-workbench-${versions.workbench}-win32-x64-full.exe.vesper-update.json`), trustedKey, { product: 'workbench', platform: 'win32', arch: 'x64', version: workbenchVersion });
 const addon = await plugin.verifyPlugin(options['addon-only'] ? resolve(options['addon-manifest']) : join(release, `addons/Vesper-workbench-${versions.workbench}.vplugin.tgz.vesper-plugin.json`), trustedKey, { platform: 'win32', arch: 'x64' });
 assert.ok(!installed || update.newer(addon.version, installed.version), 'Workbench add-on is not newer');
-for (const artifact of options['addon-only'] ? [] : [browserUpdate, workbenchUpdate, addon]) {
+for (const artifact of options['addon-only'] ? [addon] : [browserUpdate, workbenchUpdate, addon]) {
   const expected = releaseRecord.artifacts.find(item => resolve(release, item.path) === resolve(artifact.file));
   assert.equal(artifact.sha256, expected?.sha256, 'Artifact does not match packaged release acceptance evidence');
 }

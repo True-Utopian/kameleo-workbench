@@ -1,6 +1,6 @@
 {
   "name": "@true-utopian/vesper-workbench",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "description": "Vesper Workbench by true-utopian: local browser automation, durable pipelines and verified profile exports.",
   "type": "module",
   "private": true,
