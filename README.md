@@ -24,6 +24,9 @@ See the [completion checklist](docs/research/completion-gates.md), [research led
 
 End users install compiled browser files. The new local Windows Browser installer with the qualified Vesper runtime is approximately 668 MB; its guarded installed upgrade and native/form checks passed. The large Chromium source checkout is only for developers building the native kernel. [Kernel build and qualification](native/chromium/README.md).
 
+
+Native identity follow-up (13 October): Browser 0.4.8 / Workbench 0.5.11 source passes 206 tests (zero failures, two Windows environment skips). Bounded native/4-thread/8-thread hardware policies, observed-page consistency checks and qualification-aware surface reporting are implemented. Five fresh real-kernel integration checks and normal Browser/Inspect UI workflows passed in isolated stores. Windows installers are being qualified; the user’s installed pair remains 0.4.7 / 0.5.10 pending the idle/backup upgrade gate. Linux compilation, 26 native unit executions and all nine direct runtime cases passed after the explicitly approved workspace-only sandbox rule and an owned font dependency fixture. Copied-runtime, packaging and actual installed Linux acceptance remain pending. [Scope and API](docs/native-identity.md).
+
 ## Two tools, one workspace
 
 Browser provides persistent profiles, HTTP/SOCKS5 proxy credentials, folders, favorites, tags, notes, templates, reversible trash, cookie tools and independent archives. Workbench runs trusted scripts or managed flows, keeps durable run state and saves a checksum-verified profile after completion. Local Chromium is the default and requires no vendor account or subscription; proxies are optional for local fixtures. An optional licensed Kameleo compatibility adapter remains available.
