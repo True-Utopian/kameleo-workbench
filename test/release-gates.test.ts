@@ -8,13 +8,22 @@ import { createHash } from 'node:crypto';
 
 const versions = { browser: '0.4.4', workbench: '0.5.6' }, sha = '1'.repeat(64);
 function evidence() {
-  const accepted = { state: 'passed', errors: [], versions };
+  const accepted = { state: 'passed', errors: [], versions, visualReviewPassed: true };
   const surfacePolicies = ['webgl-debug-restriction','offline-audio-seed','local-font-discovery'];
   const proof = { state: 'passed', errors: [], nativeProof: true, implementation: 'native-chromium-patches', executableSha256: sha, surfacePolicies, cases: ['baseline','seed-a','seed-a-restart','seed-b','invalid-fallback','surface-policy-a','surface-policy-a-restart','surface-policy-b','surface-policy-invalid'].map(name => ({ name })) };
   const publicCommit = { main: 'commit', workflow: { sha: 'commit', status: 'completed', conclusion: 'success' } };
   return { versions, status: { groups: [{ checks: [{ id: 'owned-feature', state: 'verified' }] }] }, source: { suites: 2, passed: 151, failed: 0 }, packaged: accepted, installed: accepted, proxies: { ...accepted, actualInstalledProof: true, proxyRequests: 1, run: { state: 'saved', sha256: sha, archiveBytes: 65000 } }, ui: { state: 'passed', versions, originalMothIconVisible: true, nativeEmbeddedWorkbench: true }, python: { state: 'passed', version: versions.workbench, calendarDSTPreview: true, futureScheduleCreatedPausedRemoved: true }, audit: { metadata: { vulnerabilities: { total: 0 } } }, kernel: { revision: 'pinned' }, build: { revision: 'pinned', customKernelCompiled: true, status: 'compiled-awaiting-native-qualification', executableSha256: sha }, currentExecutableSha256: sha, units: { revision: 'pinned', status: 'native-unit-tests-passed', nativeTestExecutions: 26 }, unitXmlVerified: true, direct: proof, copied: { revision: 'pinned', executableSha256: sha, nativeUnitExecutions: 26, qualification: proof }, runtimeFilesVerified: true, integration: { ...accepted, surfacePolicies, nativeProof: true, installedKernelChanged: true, executableSha256: sha, run: { state: 'saved' } }, linux: { ...accepted, platform: 'linux', installerExecuted: true, sandboxVerified: true, nativeKernelQualified: true }, publication: { browser: publicCommit, workbench: publicCommit } };
 }
 const pending = (result: any, id: string) => assert.equal(result.gates.find((gate: any) => gate.id === id).state, 'pending');
+
+test('Linux runtime acceptance remains pending without a completed installed UI review', () => {
+  for (const visualReviewPassed of [undefined, false]) {
+    const input = evidence();
+    const result = evaluateReleaseGates({ ...input, linux: { ...input.linux, visualReviewPassed } });
+    pending(result, 'linux-native-runtime');
+    assert.equal(result.productComplete, false);
+  }
+});
 
 test('legacy scalar/canvas receipts cannot qualify the new native surface release', () => {
   const proof = evidence().direct;
