@@ -18,6 +18,8 @@ The installed Windows Browser 0.4.7 / Workbench 0.5.10 pair runs real Chromium a
 
 Automatic native-process-loss cleanup and normal Finish saving passed in the installed 0.5.10 add-on. [Recovery scope and recent-write limitation](docs/native-process-recovery.md).
 
+A public wiki, Vesper website, bundled local **API Docs** website/button and versioned Browser/Workbench guides are required, planned release work. [Documentation acceptance criteria](docs/documentation-roadmap.md).
+
 See the [completion checklist](docs/research/completion-gates.md), [research ledger](docs/research/feature-ledger.md) and [measured validation](docs/validation.md). Windows installers, offline signed updates and a signed Workbench plug-in are built locally. Linux packages are cross-built and require real Linux runtime testing.
 
 End users install compiled browser files. The new local Windows Browser installer with the qualified Vesper runtime is approximately 668 MB; its guarded installed upgrade and native/form checks passed. The large Chromium source checkout is only for developers building the native kernel. [Kernel build and qualification](native/chromium/README.md).
