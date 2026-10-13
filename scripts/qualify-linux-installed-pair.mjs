@@ -21,7 +21,18 @@ const graphicsBackend=process.argv.includes('--software-graphics')?'software':'d
 const report={at:new Date().toISOString(),state:'running',platform:'linux',versions,graphicsBackend,installationMethod:'Versioned per-user portable installer',installerExecuted:false,sandboxVerified:false,nativeKernelQualified:false,visualReviewPassed:false,checks:[],errors:[],qaRoot:qa};
 let app,browserApi,workbenchApi,connection,sandboxProfileId,client;
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
-async function service(kind){const descriptor=await json(join(data,kind,'service.json'));const token=(await readFile(join(data,kind,'admin-token'),'utf8')).trim(),url=`http://127.0.0.1:${descriptor.port}`;return {url,api:async(path,method='GET',body)=>{const r=await fetch(url+'/api/v1'+path,{method,redirect:'error',headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(240000)});assert.ok(r.ok,kind+' HTTP '+r.status);return r.headers.get('content-type')?.includes('json')?r.json():Buffer.from(await r.arrayBuffer());}};}
+async function service(kind){
+ const deadline=Date.now()+120000;let lastError;
+ while(Date.now()<deadline){
+  try{
+   const descriptor=await json(join(data,kind,'service.json'));const token=(await readFile(join(data,kind,'admin-token'),'utf8')).trim(),url=`http://127.0.0.1:${descriptor.port}`;
+   const ready=await fetch(url+'/api/v1/capabilities',{headers:{authorization:'Bearer '+token},redirect:'error',signal:AbortSignal.timeout(3000)});
+   assert.ok(ready.ok,kind+' readiness HTTP '+ready.status);assert.equal((await ready.json()).version,versions[kind]);
+   return {url,api:async(path,method='GET',body)=>{const r=await fetch(url+'/api/v1'+path,{method,redirect:'error',headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(240000)});assert.ok(r.ok,kind+' HTTP '+r.status);return r.headers.get('content-type')?.includes('json')?r.json():Buffer.from(await r.arrayBuffer());}};
+  }catch(error){lastError=error;await pause(250);}
+ }
+ throw new Error(kind+' did not become ready within 120 seconds',{cause:lastError});
+}
 async function command(args,name){const child=spawn(process.execPath,args,{stdio:['ignore','pipe','pipe']});let log='';child.stdout.on('data',chunk=>log+=chunk);child.stderr.on('data',chunk=>log+=chunk);const code=await new Promise((done,reject)=>{child.once('error',reject);child.once('exit',done);});await writeFile(join(qa,name+'.log'),log);assert.equal(code,0,name+' failed; inspect the retained owned log');}
 async function quit(){if(!app)return;const owner=app;const closed=owner.waitForEvent('close',{timeout:120000});await owner.evaluate(({Menu})=>{const item=Menu.getApplicationMenu().items[0].submenu.items.find(value=>value.label==='Quit');if(!item)throw Error('Missing normal Quit action');item.click();});await closed;app=undefined;}
 async function launch(executable,debugPort){const env={...process.env,VESPER_DESKTOP_DATA_DIR:data,VESPER_BROWSER_HEADLESS:'false',VESPER_GRAPHICS_BACKEND:graphicsBackend};for(const name of ['ELECTRON_RUN_AS_NODE','VESPER_BROWSER_EXECUTABLE','VESPER_BUNDLED_KERNEL_MANIFEST'])delete env[name];app=await _electron.launch({executablePath:executable,env,args:['--remote-debugging-port='+debugPort,'--remote-debugging-address=127.0.0.1'],timeout:120000});const page=await app.firstWindow();page.on('pageerror',error=>report.errors.push(error.message));await page.waitForSelector('#workspace:not([hidden])',{timeout:120000});return page;}
@@ -53,7 +64,19 @@ try{
  // Keep the actual installed window available for persistent remote CDP UI review.
  const debugInfo=await fetch(`http://127.0.0.1:${debugPort}/json/version`,{signal:AbortSignal.timeout(3000)});assert.ok(debugInfo.ok,'Installed Electron inspection endpoint must be available for the separate UI review');
  const ready={at:new Date().toISOString(),state:'awaiting-ui-review',qaRoot:qa,dataRoot:data,debugPort,versions,runId:native.run.id,marker:join(qa,'ui-reviewed.json')};await writeFile(join(parent,'linux-ui-ready.json'),JSON.stringify(ready,null,2));report.state='awaiting-ui-review';await mkdir(dirname(output),{recursive:true});await writeFile(output,JSON.stringify(report,null,2));
- const deadline=Date.now()+2*60*60*1000;let reviewed;while(Date.now()<deadline){try{reviewed=await json(ready.marker);break;}catch(error){if(error.code!=='ENOENT')throw error;}await pause(2000);}assert.equal(reviewed?.state,'passed','Installed visual/user-control review remains pending');assert.deepEqual(reviewed.versions,versions);assert.equal(reviewed.debugPort,debugPort);assert.equal(reviewed.visualReviewPassed,true);report.uiReview=reviewed;report.visualReviewPassed=true;
+ const deadline=Date.now()+2*60*60*1000;let reviewed,lastUiRequest;
+ while(Date.now()<deadline){
+  // Fixed operations on this helper's own Electron window only, for remote visual review.
+  try{
+   const request=await json(join(qa,'ui-request.json'));assert.ok(['launch','small'].includes(request.id));
+   if(request.id!==lastUiRequest){
+    const receipt=await app.evaluate(async({BrowserWindow},id)=>{const win=BrowserWindow.getAllWindows()[0];if(id==='small')win.setSize(1000,720);await new Promise(done=>setTimeout(done,400));const [width,height]=win.getContentSize();const bytes=(await win.capturePage()).resize({width,height,quality:'best'}).toPNG();return {bounds:win.getBounds(),contentSize:{width,height},png:Array.from(bytes)};},request.id);
+    const path=join(qa,'ui-'+request.id+'.png');await writeFile(path,Buffer.from(receipt.png));delete receipt.png;await writeFile(join(qa,'ui-'+request.id+'.json'),JSON.stringify({...receipt,path},null,2));lastUiRequest=request.id;
+   }
+  }catch(error){if(error.code!=='ENOENT')throw error;}
+  try{reviewed=await json(ready.marker);break;}catch(error){if(error.code!=='ENOENT')throw error;}await pause(500);
+ }
+ assert.equal(reviewed?.state,'passed','Installed visual/user-control review remains pending');assert.deepEqual(reviewed.versions,versions);assert.equal(reviewed.debugPort,debugPort);assert.equal(reviewed.visualReviewPassed,true);report.uiReview=reviewed;report.visualReviewPassed=true;
  report.state='passed';
 }catch(error){report.state='failed';report.errors.push(error.stack??String(error));process.exitCode=1;}
 finally{
